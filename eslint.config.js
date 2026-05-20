@@ -19,6 +19,7 @@ module.exports = [
       '**/*.config.ts',
       '**/next-env.d.ts',
       '**/prisma/**',
+      '**/e2e/**',
     ],
   },
   js.configs.recommended,

@@ -6,8 +6,8 @@ on:
   pull_request:
 
 jobs:
-  build:
-    name: lint • typecheck • build
+  web:
+    name: lint • typecheck • test • build
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -18,7 +18,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: pnpm
 
       - name: Install dependencies
@@ -30,5 +30,35 @@ jobs:
       - name: Typecheck
         run: pnpm typecheck
 
+      - name: Test
+        run: pnpm test
+
       - name: Build
         run: pnpm build
+
+  contracts:
+    name: soroban contract tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            packages/contracts/target
+          key: cargo-${{ hashFiles('packages/contracts/Cargo.lock') }}
+
+      - name: Test
+        working-directory: packages/contracts
+        run: cargo test
+
+      - name: Build wasm
+        working-directory: packages/contracts
+        run: cargo build --target wasm32-unknown-unknown --release
