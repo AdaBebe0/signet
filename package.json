@@ -5,7 +5,7 @@
   "description": "Signet — a verifiable developer career record built on Stellar/Soroban.",
   "packageManager": "pnpm@9.12.0",
   "engines": {
-    "node": ">=20",
+    "node": ">=22",
     "pnpm": ">=9"
   },
   "scripts": {
@@ -18,6 +18,7 @@
     "db:up": "docker compose -f infra/docker/docker-compose.yml up -d",
     "db:down": "docker compose -f infra/docker/docker-compose.yml down",
     "db:migrate": "pnpm --filter @signet/db run migrate",
+    "db:deploy": "pnpm --filter @signet/db run migrate:deploy",
     "db:generate": "pnpm --filter @signet/db run generate",
     "indexer:dev": "pnpm --filter @signet/indexer dev",
     "indexer:seed": "pnpm --filter @signet/indexer dev -- --reseed"
