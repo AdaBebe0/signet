@@ -4,31 +4,40 @@ Signet is a verifiable developer career record built on Stellar/Soroban. Develop
 
 ## Live demo
 
+> Demo profiles use **synthetic data on Stellar testnet** — generated, unowned
+> accounts — so no real wallet's activity is attributed to an invented persona.
+> Production renders real mainnet activity bound on-chain via the Identity Registry.
+
 | URL | Description |
 |-----|-------------|
 | `/` | Landing page with "See it in action" section |
-| `/p/aquawolf` | Demo profile — Blend Protocol collateral ops |
-| `/p/sorobuilder` | Demo profile — Soroswap DEX swaps |
-| `/p/stellardev` | Demo profile — USDC token transfers |
+| `/p/aquawolf` | Demo profile — Blend-style collateral ops (testnet, synthetic) |
+| `/p/sorobuilder` | Demo profile — Soroswap-style DEX swaps (testnet, synthetic) |
+| `/p/stellardev` | Demo profile — USDC token transfers (testnet, synthetic) |
 | `/how-it-works` | How Signet works + what's coming |
 
 ## What's working in this build
 
 - **Landing page** — polished marketing page with animated sections and a live "See it in action" demos block linking to the 3 profiles
-- **Demo profiles at `/p/{handle}`** — server-rendered profile pages reading real Soroban operation data from `apps/web/public/data/{handle}.json`; each operation links to Stellar Expert for independent verification
+- **Demo profiles at `/p/{handle}`** — server-rendered (SSG) profile pages reading synthetic testnet operation data from `apps/web/public/data/{handle}.json`; clearly labelled as demo data
 - **How it works page** — explains the thesis, what's live, and what's coming
-- **Middleware routing** — `/p/` and `/how-it-works` pass through correctly; existing subdomain routing logic preserved
-- **Real on-chain data** — all operation data comes from the Stellar Horizon public API, fetched live and stored as static JSON; function names decoded from XDR
+- **Middleware routing** — `/p/` and `/how-it-works` pass through; handles validated; legacy `/profile/` redirects to `/p/`
+- **Production data path** — the same UI renders real Horizon API data on mainnet once the indexer + registry are live (`safeDbProfile` already wires the DB-with-static fallback)
 
-## What's stubbed or coming next
+## Also implemented
 
-- **Handle-to-wallet mapping** — hardcoded in `profiles.json`; no wallet-connect or on-chain attestation yet
-- **No on-chain identity registry** — Phase 2 will write a Soroban contract that binds profile → wallet cryptographically
-- **No indexer** — operation data was fetched once and stored statically; the `apps/indexer/` worker is scaffolded but not running
-- **Dashboard routes** (`/app`, `/app/wallets`, etc.) — scaffolded but require a database connection (Prisma) and are not functional
-- **`/profile/{handle}` route** — uses Prisma, will 404 or error without a running database; use `/p/{handle}` for the demo
-- **Reputation scoring** — op counts are raw; no attestations, TVL tracking, or incident records
-- **No authentication** — claim flow ("Sign in with your wallet") is a stub
+- **On-chain Identity Registry** — a real Soroban contract (`packages/contracts/identity-registry`) binds a wallet to a handle via a signed `claim`; ownership is enforced by `require_auth`. 13 unit tests, builds to wasm.
+- **Wallet connect + claim flow** — `Connect wallet` / `Claim your handle` use Stellar Wallets Kit and submit the on-chain claim (`apps/web/lib/{wallet,registry}.ts`). Until the registry's contract id is configured (`NEXT_PUBLIC_IDENTITY_REGISTRY_ID`), the claim surfaces an honest "Phase 2" message.
+- **Real API + SDK** — tRPC `profile.byHandle` / `profile.list` / `health`; `@signet/sdk` fetches them. Both covered by tests.
+- **CI gates** lint · typecheck · test · build, plus a Rust contract job.
+
+## What's coming next (Phase 2)
+
+- **Deploy the registry** to testnet/mainnet and set `NEXT_PUBLIC_IDENTITY_REGISTRY_ID` to make claims live.
+- **Run the indexer** against a Postgres instance to populate full deployment/activity history; `/p` already has a DB-with-static-fallback loader (`safeDbProfile`).
+- **Self-sovereign bindings** replace the curated `profiles.json` mapping once claims are live.
+- **Developer dashboard** (`/app/*`) — currently an honest read-only preview pending wallet auth.
+- **Reputation scoring** — attestations, TVL tracking, incident records.
 
 ## Run locally
 
@@ -43,15 +52,15 @@ pnpm --filter @signet/web dev
 Visit `http://localhost:3000` for the landing page.
 Visit `http://localhost:3000/p/aquawolf` for the first demo profile.
 
-> **Note:** Google Fonts (`IBM Plex Sans`, `IBM Plex Mono`) are loaded via `next/font/google`. In environments without internet access, the build will log font fetch errors but continue — the pages render with system font fallbacks.
+> **Requires Node 22+.** Fonts (`IBM Plex Sans`/`Mono`) load via a browser-side `@import` in `globals.css` (not `next/font`), so the build never blocks on font downloads.
 
 ## Architecture (planned)
 
 ```
 ┌─────────────────────────────────────────────────────┐
 │                    apps/web (Next.js)                │
-│  /p/{handle}   — static JSON → profile render        │
-│  /profile/{handle} — Prisma → profile render (Phase2)│
+│  /p/{handle}   — canonical profile (static + DB-opt) │
+│  /profile/{handle} — legacy alias → redirects to /p  │
 └───────────────────┬─────────────────────────────────┘
                     │
           ┌─────────▼─────────┐
@@ -66,9 +75,9 @@ Visit `http://localhost:3000/p/aquawolf` for the first demo profile.
           │                   │   Contract, Snapshot
           └───────────────────┘
 
-Future:
-  packages/contracts/identity-registry  — Soroban contract
-  packages/sdk                          — External SDK
+Implemented:
+  packages/contracts/identity-registry  — Soroban claim contract (13 tests)
+  packages/sdk                          — External SDK (fetches the tRPC API)
 ```
 
 ## Directory structure

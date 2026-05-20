@@ -1,47 +1,74 @@
 # Next steps
 
-This repo is currently scaffolding only. Work for the next pass, in priority
-order:
+## Done in the Phase-1 hardening pass
 
-1. **Implement the `identity-registry` Soroban contract.** Replace the
-   hello-world stub in `packages/contracts/identity-registry/src/lib.rs` with
-   the real binding logic + signature verification (wallet → handle
-   attestations, signed binding payload, read methods for the indexer).
+1. **Identity Registry Soroban contract — implemented.**
+   `packages/contracts/identity-registry/src/lib.rs` now binds a wallet to a
+   handle with `claim`/`release`/`admin_revoke` + read methods, enforces
+   ownership via `require_auth`, validates handles, and emits events. Covered by
+   13 unit tests (`cargo test`) and builds to a ~11 KB wasm.
+2. **Wallet connect — implemented.** `apps/web/lib/wallet.ts` configures Stellar
+   Wallets Kit (network from `NEXT_PUBLIC_STELLAR_NETWORK`), with
+   connect/disconnect/persist/sign helpers, wired into the hero via
+   `ConnectWallet`.
+3. **On-chain claim flow — implemented (config-gated).** `apps/web/lib/registry.ts`
+   builds, simulates, signs and submits a `claim` invocation. Until
+   `NEXT_PUBLIC_IDENTITY_REGISTRY_ID` is set it surfaces an honest "Phase 2"
+   message instead of failing.
+4. **Routing consolidated.** One canonical profile surface (`/p/{handle}`); the
+   legacy Prisma route now redirects, so no request path depends on Postgres.
+5. **tRPC + SDK are real.** `profile.byHandle` / `profile.list` / `health`
+   procedures; `@signet/sdk` fetches them over HTTP. Both covered by tests.
+6. **CI gates lint · typecheck · test · build, plus a Rust contract job.**
 
-2. **Expand the Prisma schema.** Grow `packages/db/prisma/schema.prisma`
-   beyond the placeholder `Profile` to model wallets, contracts,
-   attestations, and activity snapshots; add the first real migration.
+## Remaining work, in priority order
 
-3. **Wire up Stellar Wallets Kit for wallet connect.** Flesh out
-   `apps/web/lib/wallet.ts` (network from `STELLAR_NETWORK`, module list,
-   connect/disconnect/sign helpers, persistence) and a dashboard entry point.
+1. **Deploy the Identity Registry** to testnet then mainnet; set
+   `NEXT_PUBLIC_IDENTITY_REGISTRY_ID` and initialize the admin. This flips the
+   claim flow live.
+2. **Provision Postgres + run the indexer** (`apps/indexer`) against the curated
+   wallets to populate full deployment/activity history, then have `/p` read
+   from the DB with a static fallback (`safeDbProfile` is already wired).
+3. **Build out the dashboard** (`apps/web/app/(dashboard)`) behind wallet auth:
+   profile editing, wallet linking, settings.
+4. **"Verified by Signet" badge** — a small embeddable snippet powered by
+   `@signet/sdk`.
 
-4. **Build the on-chain attestation flow end-to-end.** Sign the binding
-   payload in the dashboard, submit to `identity-registry`, and verify.
+### Remaining work needs external resources (you trigger; scaffolding is ready)
 
-5. **Build the indexer's deployment-detection worker.** Implement
-   `apps/indexer/src/workers/deployment.ts` (+ `horizon.ts` / `soroban-rpc.ts`
-   / `db.ts`) to discover contract deployments for linked wallets.
+The codebase is deploy-ready. What's left to reach a live 8/10 MVP is operational:
 
-6. **Build the public profile page UI.** Replace the placeholders under
-   `apps/web/app/(profile)/profile/[handle]` with the real profile and
-   per-contract activity views.
+1. **Deploy the contract** — `./infra/deploy-contract.sh` (builds, deploys,
+   `initialize`s), then set `NEXT_PUBLIC_IDENTITY_REGISTRY_ID` +
+   `INDEXER_REGISTRY_CONTRACT_ID`.
+2. **Provision Postgres + run the indexer** — `apps/indexer/Dockerfile` runs
+   `migrate deploy` then starts the worker. Point it at a managed Postgres.
+3. **Wire a monitoring/error-tracking provider** to `/health` + the structured
+   logs (Sentry/OTel keys).
+4. **Commission a contract audit** before mainnet.
 
-7. **Build the demo external integration.** A simple "Verified by Signet"
-   badge snippet powered by `@signet/sdk`.
+### Done (in-tree, this round)
 
-## Scaffolding notes / deviations
+- **Attestation worker** — reads `claimed`/`released` events → DB (5 tests).
+- **DB migration** — initial migration committed; `pnpm db:deploy` applies it.
+- **Observability** — `/health` probe, structured JSON logger, per-request ids,
+  per-ip rate limiting on the API.
+- **Wallet session auth (SIWS)** — challenge/verify/logout routes + HMAC session;
+  the dashboard is gated behind a real sign-in wall (`lib/auth.ts`, 5 tests).
+- **`/p` is DB-preferred** with a static fallback (`safeDbProfile`).
+- **Reputation signal** + **OG images** on profiles.
+- **Tests** — 29 TS (web 20 · sdk 4 · indexer 5) + 14 cargo; CI gates all.
+- **Deploy scaffolding** — indexer `Dockerfile`, `infra/deploy-contract.sh`.
+- **e2e** — Playwright config + smoke specs (`test:e2e`); enable with
+  `pnpm add -D @playwright/test && pnpm exec playwright install`.
 
-- **Route groups vs. the spec tree.** Next.js route groups (`(marketing)`,
-  `(dashboard)`, …) are invisible in the URL, so three groups each owning a
-  root `page.tsx` would all resolve to `/` and fail the build with a
-  "parallel pages" error. To keep the app buildable while preserving the
-  middleware's documented path scheme, each non-marketing group's pages live
-  under a real path segment: `(dashboard)/app/*`, `(docs)/docs/*`,
-  `(profile)/profile/[handle]/*`. Marketing keeps `/`. The middleware rewrites
-  subdomains to these internal paths. Revisit if the routing model changes.
-- A root `apps/web/app/layout.tsx` (html/body + global CSS) was added in
-  addition to the per-group layouts so every route has a valid root layout.
+## Notes / deviations
+
+- **Route groups vs. the spec tree.** Next.js route groups are invisible in the
+  URL, so each non-marketing group's pages live under a real path segment
+  (`(dashboard)/app/*`, `(docs)/docs/*`). Marketing keeps `/`.
+- **Node 22+** is required (the test runner uses `node --experimental-strip-types
+  --test`, so TS tests run with zero extra dependencies).
 - `@signet/db` re-exports `@prisma/client`; the client is generated on
-  `postinstall` (and `pnpm db:generate`). Typecheck depends on that having
-  run.
+  `postinstall` / `pnpm db:generate`. The web app no longer hard-depends on it
+  at request time.
