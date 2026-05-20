@@ -6,8 +6,7 @@ Rust/Soroban smart contracts for Signet, managed as a Cargo workspace
 ## Crates
 
 - [`identity-registry`](./identity-registry) — binds a Stellar wallet to a
-  Signet identity via on-chain attestations. Currently a Soroban
-  "Hello World" stub.
+  Signet identity via signed, on-chain claims. Implemented; 13 tests.
 
 ## Prerequisites
 
