@@ -1,5 +1,6 @@
-// Soroban RPC — Phase 2 (on-chain attestation reads).
-// For Phase 1 the indexer uses Horizon only.
-export function createSorobanRpcClient(_rpcUrl: string): null {
-  return null;
+import { rpc } from '@stellar/stellar-sdk';
+
+/** Soroban RPC client — used to read the Identity Registry's event stream. */
+export function createSorobanRpcServer(rpcUrl: string): rpc.Server {
+  return new rpc.Server(rpcUrl, { allowHttp: rpcUrl.startsWith('http://') });
 }
