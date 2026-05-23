@@ -1,5 +1,144 @@
-// Phase 2: poll the identity-registry contract for on-chain wallet attestations.
-// Not implemented in Phase 1 — wallets are curated via seed-data.ts.
-export async function runAttestationWorker(): Promise<void> {
-  // TODO(signet-phase2): implement on-chain attestation reads.
+import { rpc, scValToNative, xdr } from '@stellar/stellar-sdk';
+import { prisma } from '../db.js';
+import { logger } from '../logger.js';
+import type { IndexerConfig } from '../config.js';
+
+/**
+ * Attestation worker — Phase 2.
+ *
+ * Reads the Identity Registry's `claimed` / `released` event stream from
+ * Soroban RPC and syncs the resulting wallet↔handle bindings into the database.
+ * This is what makes a self-sovereign on-chain claim show up on the website:
+ * the curated `seed-data.ts` mapping becomes a fallback, and on-chain truth
+ * takes over.
+ *
+ * A dedicated cursor (`IndexerCursor` id = `attestation`) tracks the last
+ * processed ledger so each tick only reads new events.
+ */
+
+const CURSOR_ID = 'attestation';
+
+export type AttestationEvent = {
+  kind: 'claimed' | 'released';
+  handle: string;
+  wallet: string;
+};
+
+/**
+ * Minimal slice of the Prisma client this worker touches. Declaring it as an
+ * interface lets tests inject a lightweight mock instead of a real database.
+ */
+export interface AttestationStore {
+  profile: {
+    upsert(args: {
+      where: { handle: string };
+      update: Record<string, unknown>;
+      create: { handle: string };
+    }): Promise<{ id: string }>;
+  };
+  wallet: {
+    upsert(args: {
+      where: { pubkey: string };
+      update: Record<string, unknown>;
+      create: Record<string, unknown>;
+    }): Promise<unknown>;
+    deleteMany(args: { where: { pubkey: string } }): Promise<unknown>;
+  };
+}
+
+/**
+ * Decode a raw contract event into an `AttestationEvent`, or `null` if the
+ * event isn't one we care about (wrong topic, malformed payload).
+ *
+ * The contract publishes:
+ *   topics = [ symbol("claimed"|"released"), string(handle) ],  data = address(wallet)
+ */
+export function decodeEvent(topics: xdr.ScVal[], value: xdr.ScVal): AttestationEvent | null {
+  try {
+    if (topics.length < 2) return null;
+    const kind = scValToNative(topics[0]!) as string;
+    if (kind !== 'claimed' && kind !== 'released') return null;
+    const handle = String(scValToNative(topics[1]!));
+    const wallet = String(scValToNative(value));
+    if (!handle || !wallet) return null;
+    return { kind, handle, wallet };
+  } catch {
+    return null;
+  }
+}
+
+/** Apply a single decoded event to the store. Idempotent. */
+export async function applyAttestation(
+  store: AttestationStore,
+  ev: AttestationEvent,
+): Promise<void> {
+  if (ev.kind === 'claimed') {
+    const profile = await store.profile.upsert({
+      where: { handle: ev.handle },
+      update: {},
+      create: { handle: ev.handle },
+    });
+    await store.wallet.upsert({
+      where: { pubkey: ev.wallet },
+      update: { profileId: profile.id, source: 'onchain', isPrimary: true },
+      create: { pubkey: ev.wallet, profileId: profile.id, source: 'onchain', isPrimary: true },
+    });
+  } else {
+    // released → drop the binding (the wallet row carries the link).
+    await store.wallet.deleteMany({ where: { pubkey: ev.wallet } });
+  }
+}
+
+export async function runAttestationWorker(
+  server: rpc.Server,
+  config: IndexerConfig,
+): Promise<void> {
+  if (!config.registryContractId) {
+    logger.debug({}, 'attestation.skip — no registry contract configured');
+    return;
+  }
+
+  // Resume from the cursor, or start `eventWindowLedgers` back on first run.
+  const cursor = await prisma.indexerCursor.findUnique({ where: { id: CURSOR_ID } });
+  let startLedger: number;
+  if (cursor && cursor.lastLedger > 0) {
+    startLedger = cursor.lastLedger + 1;
+  } else {
+    const { sequence } = await server.getLatestLedger();
+    startLedger = Math.max(1, sequence - config.eventWindowLedgers);
+  }
+
+  let applied = 0;
+  let latestLedger = startLedger;
+
+  try {
+    const res = await server.getEvents({
+      startLedger,
+      filters: [{ type: 'contract', contractIds: [config.registryContractId] }],
+      limit: 200,
+    });
+    latestLedger = res.latestLedger;
+
+    for (const e of res.events) {
+      const decoded = decodeEvent(e.topic, e.value);
+      if (!decoded) continue;
+      await applyAttestation(prisma as unknown as AttestationStore, decoded);
+      applied++;
+      logger.info(
+        { kind: decoded.kind, handle: decoded.handle, ledger: e.ledger },
+        'attestation.applied',
+      );
+    }
+  } catch (err) {
+    logger.error({ error: String(err), startLedger }, 'attestation.fetchFailed');
+    return; // leave the cursor untouched so we retry this window next tick
+  }
+
+  await prisma.indexerCursor.upsert({
+    where: { id: CURSOR_ID },
+    update: { lastLedger: latestLedger },
+    create: { id: CURSOR_ID, lastLedger: latestLedger },
+  });
+
+  logger.info({ applied, throughLedger: latestLedger }, 'attestation.done');
 }
