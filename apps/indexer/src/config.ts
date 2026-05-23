@@ -6,6 +6,10 @@ export interface IndexerConfig {
   tickIntervalMs: number;
   logLevel: string;
   reseed: boolean;
+  /** Identity Registry contract id (C…). Empty until the contract is deployed. */
+  registryContractId: string;
+  /** On first run (no cursor), how many ledgers back to begin reading events. */
+  eventWindowLedgers: number;
 }
 
 export function loadConfig(): IndexerConfig {
@@ -14,11 +18,16 @@ export function loadConfig(): IndexerConfig {
 
   return {
     databaseUrl,
-    network:         process.env.INDEXER_NETWORK          ?? 'mainnet',
-    horizonUrl:      process.env.INDEXER_HORIZON_URL      ?? 'https://horizon.stellar.org',
-    rpcUrl:          process.env.INDEXER_RPC_URL          ?? 'https://soroban-rpc.stellar.org',
+    network:         process.env.INDEXER_NETWORK          ?? 'testnet',
+    horizonUrl:      process.env.INDEXER_HORIZON_URL      ?? 'https://horizon-testnet.stellar.org',
+    rpcUrl:          process.env.INDEXER_RPC_URL          ?? 'https://soroban-testnet.stellar.org',
     tickIntervalMs:  Number(process.env.INDEXER_TICK_INTERVAL_MS ?? 30_000),
     logLevel:        process.env.INDEXER_LOG_LEVEL        ?? 'info',
     reseed:          process.argv.includes('--reseed'),
+    registryContractId:
+      process.env.INDEXER_REGISTRY_CONTRACT_ID ??
+      process.env.NEXT_PUBLIC_IDENTITY_REGISTRY_ID ??
+      '',
+    eventWindowLedgers: Number(process.env.INDEXER_EVENT_WINDOW_LEDGERS ?? 17_280),
   };
 }
