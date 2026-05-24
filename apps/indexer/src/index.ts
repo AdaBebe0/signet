@@ -2,18 +2,24 @@ import { loadConfig } from './config.js';
 import { logger, setLogLevel } from './logger.js';
 import { connectDb, disconnectDb, prisma } from './db.js';
 import { createHorizonServer, sleep } from './stellar.js';
+import { createSorobanRpcServer } from './soroban-rpc.js';
 import { runSeedWorker } from './workers/seed.js';
 import { runDeploymentWorker } from './workers/deployment.js';
 import { runActivityWorker } from './workers/activity.js';
+import { runAttestationWorker } from './workers/attestation.js';
 
 let shuttingDown = false;
 
 async function tick(
   horizon: ReturnType<typeof createHorizonServer>,
+  soroban: ReturnType<typeof createSorobanRpcServer>,
   config: ReturnType<typeof loadConfig>,
 ): Promise<void> {
   const start = Date.now();
   logger.info({}, 'tick.start');
+
+  // Attestations: ingest on-chain claim/release events into the DB
+  await runAttestationWorker(soroban, config);
 
   // Deployments: find new contract creations for all tracked wallets
   const highestLedger = await runDeploymentWorker(horizon, config);
@@ -41,6 +47,8 @@ async function main(): Promise<void> {
     {
       network:  config.network,
       horizon:  config.horizonUrl,
+      rpc:      config.rpcUrl,
+      registry: config.registryContractId || '(unset)',
       interval: config.tickIntervalMs,
     },
     'indexer.starting',
@@ -49,6 +57,7 @@ async function main(): Promise<void> {
   await connectDb();
 
   const horizon = createHorizonServer(config.horizonUrl);
+  const soroban = createSorobanRpcServer(config.rpcUrl);
 
   // Check if we need to seed
   const cursor = await prisma.indexerCursor.findUnique({ where: { id: 'main' } });
@@ -68,7 +77,7 @@ async function main(): Promise<void> {
   // Main loop
   while (!shuttingDown) {
     try {
-      await tick(horizon, config);
+      await tick(horizon, soroban, config);
     } catch (err) {
       logger.error({ error: String(err) }, 'tick.error');
     }
