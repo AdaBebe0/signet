@@ -1,28 +1,48 @@
-import type { Handle, PlaceholderProfile } from '@signet/types';
+import type { Handle, ProfileResponse } from '@signet/types';
 
 export interface SignetClientOptions {
-  /** Base URL of the Signet API, e.g. https://api.signet.dev */
+  /** Base URL of a Signet deployment, e.g. https://signet.dev */
   baseUrl?: string;
+  /** Optional fetch implementation (for tests / non-browser runtimes). */
+  fetch?: typeof fetch;
 }
 
 /**
- * Stub client for the external Signet SDK.
+ * Public SDK client for the Signet API.
  *
- * TODO(signet): implement real fetch calls against the public API
- * (profile lookup, contract list, attestation verification, "Verified by
- * Signet" badge data).
+ * Talks to the tRPC endpoint over its HTTP GET form
+ * (`/api/trpc/{procedure}?input=…`) so external integrators don't need the
+ * tRPC client library.
  */
 export class SignetClient {
   private readonly baseUrl: string;
+  private readonly fetchImpl: typeof fetch;
 
   constructor(options: SignetClientOptions = {}) {
-    this.baseUrl = options.baseUrl ?? 'https://api.signet.dev';
+    this.baseUrl = (options.baseUrl ?? 'https://signet.dev').replace(/\/$/, '');
+    this.fetchImpl = options.fetch ?? globalThis.fetch;
+    if (!this.fetchImpl) {
+      throw new Error('[signet] no fetch implementation available; pass options.fetch');
+    }
   }
 
-  // TODO(signet): replace with a real network call.
-  async getProfile(handle: Handle): Promise<PlaceholderProfile | null> {
-    void this.baseUrl;
-    void handle;
-    return null;
+  private async query<T>(procedure: string, input: unknown): Promise<T | null> {
+    const url = `${this.baseUrl}/api/trpc/${procedure}?input=${encodeURIComponent(
+      JSON.stringify(input),
+    )}`;
+    const res = await this.fetchImpl(url, { headers: { accept: 'application/json' } });
+    if (!res.ok) return null;
+    const body = (await res.json()) as { result?: { data?: T } };
+    return body.result?.data ?? null;
+  }
+
+  /** Fetch a developer's profile + on-chain stats, or null if not found. */
+  async getProfile(handle: Handle): Promise<ProfileResponse | null> {
+    return this.query<ProfileResponse>('profile.byHandle', { handle });
+  }
+
+  /** List every curated handle in the registry. */
+  async listHandles(): Promise<Handle[]> {
+    return (await this.query<Handle[]>('profile.list', undefined)) ?? [];
   }
 }
