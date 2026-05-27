@@ -14,6 +14,7 @@
   "scripts": {
     "build": "prisma generate",
     "migrate": "prisma migrate dev",
+    "migrate:deploy": "prisma migrate deploy",
     "generate": "prisma generate",
     "typecheck": "tsc --noEmit",
     "lint": "eslint . --config ../../eslint.config.js",
