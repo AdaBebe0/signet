@@ -17,12 +17,16 @@ import { NextResponse, type NextRequest } from 'next/server';
  *   2. Otherwise (Vercel previews, bare localhost), fall back to path-based
  *      routing so every surface is still reachable.
  *
- * TODO(signet): once profiles exist, validate the handle (charset/length) and
- * check profile existence before rewriting to /profile/* — otherwise show a
- * proper 404 instead of rendering an empty profile.
+ * Handles are validated (charset/length) before being routed to the profile
+ * surface; anything malformed falls through to the marketing root. Existence
+ * is enforced by the profile page itself (`notFound()`).
  */
 
 const ROOT_DOMAIN = process.env.NEXT_PUBLIC_ROOT_DOMAIN ?? 'signet.dev';
+
+/** Canonical profile path. Mirrors the on-chain registry's handle rules. */
+const HANDLE_RE = /^[a-z0-9_-]{1,32}$/;
+const isValidHandle = (h: string): boolean => HANDLE_RE.test(h);
 
 // Subdomains / first path segments that are NOT developer handles.
 const RESERVED = new Set([
@@ -94,7 +98,10 @@ export function middleware(req: NextRequest): NextResponse {
       return NextResponse.next();
     }
     // Anything else is treated as a developer handle: {handle}.signet.dev
-    return rewriteTo(req, `/profile/${subdomain}${pathname === '/' ? '' : pathname}`);
+    if (isValidHandle(subdomain) && pathname === '/') {
+      return rewriteTo(req, `/p/${subdomain}`);
+    }
+    return NextResponse.next();
   }
 
   // ---- 2. Path-based fallback ---------------------------------------------
@@ -115,16 +122,18 @@ export function middleware(req: NextRequest): NextResponse {
     return NextResponse.next();
   }
 
-  // `/@{handle}` → profile
+  // `/@{handle}` → canonical profile
   if (first && first.startsWith('@')) {
-    const handle = first.slice(1);
-    const rest = segments.slice(1);
-    return rewriteTo(req, `/profile/${[handle, ...rest].join('/')}`);
+    const handle = first.slice(1).toLowerCase();
+    if (isValidHandle(handle)) {
+      return rewriteTo(req, `/p/${handle}`);
+    }
+    return NextResponse.next();
   }
 
-  // `/{handle}` where the segment isn't a reserved app route → profile
-  if (first && !RESERVED.has(first)) {
-    return rewriteTo(req, `/profile/${segments.join('/')}`);
+  // `/{handle}` where the segment isn't a reserved app route → canonical profile
+  if (first && !RESERVED.has(first) && segments.length === 1 && isValidHandle(first)) {
+    return rewriteTo(req, `/p/${first}`);
   }
 
   // Otherwise → marketing root.
