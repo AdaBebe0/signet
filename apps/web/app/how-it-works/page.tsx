@@ -79,10 +79,11 @@ export default function HowItWorksPage() {
           >
             /p/{'{handle}'}
           </code>{' '}
-          render real on-chain data fetched from the public Stellar Horizon API. Each profile
-          shows a wallet&apos;s Soroban activity — invocations, function calls, token balance
-          changes — pulled directly from the public ledger. The handle-to-wallet mapping is
-          currently hardcoded; cryptographic binding is planned for Phase 2.
+          currently render synthetic data on Stellar testnet to demonstrate the interface —
+          invocations, function calls, token balance changes. In production each profile shows a
+          real wallet&apos;s Soroban activity pulled from the public ledger via the Horizon API.
+          The handle-to-wallet mapping is curated today; cryptographic binding via the on-chain
+          Identity Registry is planned for Phase 2.
         </Section>
 
         <Section title="What's coming">
