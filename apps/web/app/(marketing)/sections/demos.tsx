@@ -45,8 +45,8 @@ export function Demos() {
           className="mt-5 max-w-[480px] text-[15px] leading-[1.65] tracking-[-0.005em] text-[#8a8779]"
           style={{ fontFamily: "var(--font-body)" }}
         >
-          Real Stellar wallets. Real Soroban invocations. Each profile is pulled live from
-          the public Horizon API.
+          Synthetic testnet profiles that demonstrate the interface. In production, each
+          renders a real wallet&apos;s Soroban activity pulled live from the Horizon API.
         </p>
       </motion.div>
 
