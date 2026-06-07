@@ -3,6 +3,7 @@ import { useRef } from "react";
 import { motion, useScroll, useTransform } from "framer-motion";
 import { Seal } from "../components/seal";
 import { SignetMonogram } from "../components/signet-monogram";
+import { ConnectWallet } from "../components/connect-wallet";
 
 export function Hero() {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -44,14 +45,10 @@ export function Hero() {
             Demo
           </a>
         </div>
-        <a
-          href="#"
-          className="text-[11px] uppercase tracking-[0.22em] text-[#f5f4ee]"
-          style={{ fontFamily: "var(--font-mono)" }}
-        >
-          <span className="border-b border-[#8b1a1a] pb-1">Sign in</span>
-          <span className="ml-1.5 text-[#8b1a1a]">→</span>
-        </a>
+        <ConnectWallet
+          variant="nav"
+          className="text-[11px] uppercase tracking-[0.22em] text-[#f5f4ee] disabled:opacity-50"
+        />
       </nav>
 
       {/* Hero */}
@@ -76,7 +73,7 @@ export function Hero() {
             <span className="text-[#3d3a33]">/</span>
             Soroban
             <span className="text-[#3d3a33]">/</span>
-            <span className="text-[#5e5b51]">Mainnet</span>
+            <span className="text-[#5e5b51]">Testnet demo</span>
           </motion.div>
 
           <h1
@@ -133,18 +130,12 @@ export function Hero() {
             transition={{ duration: 0.8, delay: 1, ease: [0.16, 1, 0.3, 1] }}
             className="mt-12 flex flex-wrap items-center gap-5"
           >
+            <ConnectWallet
+              variant="cta"
+              className="group inline-flex items-center gap-3 bg-[#f5f4ee] px-7 py-4 text-[12px] font-medium uppercase tracking-[0.18em] text-[#0a0908] transition-all duration-300 hover:bg-[#c2410c] hover:text-[#f5f4ee] disabled:opacity-60"
+            />
             <a
-              href="#"
-              className="group inline-flex items-center gap-3 bg-[#f5f4ee] px-7 py-4 text-[12px] font-medium uppercase tracking-[0.18em] text-[#0a0908] transition-all duration-300 hover:bg-[#c2410c] hover:text-[#f5f4ee]"
-              style={{ fontFamily: "var(--font-mono)" }}
-            >
-              Create your profile
-              <span className="text-[#8b1a1a] transition-transform duration-300 group-hover:translate-x-1 group-hover:text-[#f5f4ee]">
-                →
-              </span>
-            </a>
-            <a
-              href="#"
+              href="/p/aquawolf"
               className="group inline-flex items-center gap-2.5 px-1 py-4 text-[12px] uppercase tracking-[0.18em] text-[#b8b5a8] transition-colors hover:text-[#f5f4ee]"
               style={{ fontFamily: "var(--font-mono)" }}
             >
@@ -163,8 +154,7 @@ export function Hero() {
             style={{ fontFamily: "var(--font-mono)" }}
           >
             <span className="h-px w-10 bg-[#3d3a33]" />
-            {/* TODO(signet): wire to live counts via tRPC */}
-            <span>1,247 profiles · 38,402 contracts indexed</span>
+            <span>Curated demo profiles · synthetic testnet activity</span>
           </motion.div>
         </div>
 
