@@ -2,71 +2,58 @@
   "_embedded": {
     "records": [
       {
-        "_links": {
-          "self": {
-            "href": "https://horizon.stellar.org/operations/268993814635773953"
-          },
-          "transaction": {
-            "href": "https://horizon.stellar.org/transactions/eb64ae6ac9319f3cee5807b873c8e25f329698c9f17236bf00dc14837d228395"
-          },
-          "effects": {
-            "href": "https://horizon.stellar.org/operations/268993814635773953/effects"
-          },
-          "succeeds": {
-            "href": "https://horizon.stellar.org/effects?order=desc&cursor=268993814635773953"
-          },
-          "precedes": {
-            "href": "https://horizon.stellar.org/effects?order=asc&cursor=268993814635773953"
-          }
-        },
-        "id": "268993814635773953",
-        "paging_token": "268993814635773953",
-        "transaction_successful": true,
-        "source_account": "GCXWNGYVEUUFG2HES6BOQWD7OXGR6FBW5YT2M5ABB434HGAFOSW53KOD",
+        "id": "2000259760711406685",
         "type": "invoke_host_function",
-        "type_i": 24,
-        "created_at": "2026-05-18T21:33:48Z",
-        "transaction_hash": "eb64ae6ac9319f3cee5807b873c8e25f329698c9f17236bf00dc14837d228395",
         "function": "HostFunctionTypeHostFunctionTypeInvokeContract",
-        "parameters": [
+        "decoded_function": "swap_exact_input_single_hints",
+        "source_account": "GBVBJEP2BSKHW6YBFCZR2HJKHZDLJOU7ZKTH2HSNUUQY322RWLURH3EQ",
+        "created_at": "2026-05-30T17:55:02Z",
+        "transaction_hash": "7c33a09cdf732aff8dca6772d4a1e571b20f9abf118e34f58502675ddb870970",
+        "transaction_successful": true,
+        "asset_balance_changes": [
           {
-            "value": "AAAAEgAAAAHYhmt2dRfRZCq+zOBuvY9AyqGTE/ulCHB0bEWB606/bA==",
-            "type": "Address"
+            "asset_type": "credit_alphanum4",
+            "asset_code": "USDC",
+            "type": "transfer",
+            "from": "GBVBJEP2BSKHW6YBFCZR2HJKHZDLJOU7ZKTH2HSNUUQY322RWLURH3EQ",
+            "to": "CBRJK4SZPPP4TJGYMOZ575IKYMJ5RFTBY45PHVWGXRCM4MRRKXNHZCEB",
+            "amount": "147.45"
           },
           {
-            "value": "AAAADwAAAB1zd2FwX2V4YWN0X2lucHV0X3NpbmdsZV9oaW50cwAAAA==",
-            "type": "Sym"
-          },
-          {
-            "value": "AAAAEQAAAAEAAAAJAAAADwAAAAlhbW91bnRfaW4AAAAAAAAKAAAAAAAAAAAAAAAAV+M04AAAAA8AAAASYW1vdW50X291dF9taW5pbXVtAAAAAAAKAAAAAAAAAAAAAAACVA2DOwAAAA8AAAAIZGVhZGxpbmUAAAAFAAAAAGoLhcoAAAAPAAAAA2ZlZQAAAAADAAALuAAAAA8AAAAJcmVjaXBpZW50AAAAAAAAEgAAAAAAAAAAr2abFSUoU2jkl4LoWH91zR8UNu4npnQBDzfDmAV0rd0AAAAPAAAABnNlbmRlcgAAAAAAEgAAAAAAAAAAr2abFSUoU2jkl4LoWH91zR8UNu4npnQBDzfDmAV0rd0AAAAPAAAAFHNxcnRfcHJpY2VfbGltaXRfeDk2AAAACQAAAAAAAAAAAAAAAAAAAAAAAAAPAAAACHRva2VuX2luAAAAEgAAAAGt785ZruUpaPdgYdSUwlJbdWWfpClqZfSZ7ynlZHfklgAAAA8AAAAJdG9rZW5fb3V0AAAAAAAAEgAAAAEltPzYWa7C+mNIQ4xImzw8EMmLbSG+T9PLMMtolT75dw==",
-            "type": "Map"
-          },
-          {
-            "value": "AAAAEQAAAAEAAAADAAAADwAAAApjaGVja3BvaW50AAAAAAADAAAJFwAAAA8AAAAOY2hlY2twb2ludF9taW4AAAAAAAMAAAAAAAAADwAAAARzbG90AAAACQAAAAAAAAAAAAAAAAHEdW0=",
-            "type": "Map"
+            "asset_type": "native",
+            "type": "transfer",
+            "from": "CBRJK4SZPPP4TJGYMOZ575IKYMJ5RFTBY45PHVWGXRCM4MRRKXNHZCEB",
+            "to": "GBVBJEP2BSKHW6YBFCZR2HJKHZDLJOU7ZKTH2HSNUUQY322RWLURH3EQ",
+            "amount": "1002.2600000"
           }
-        ],
-        "address": "",
-        "salt": "",
+        ]
+      },
+      {
+        "id": "2000142105317214467",
+        "type": "invoke_host_function",
+        "function": "HostFunctionTypeHostFunctionTypeInvokeContract",
+        "decoded_function": "swap_exact_input_single_hints",
+        "source_account": "GBVBJEP2BSKHW6YBFCZR2HJKHZDLJOU7ZKTH2HSNUUQY322RWLURH3EQ",
+        "created_at": "2026-04-11T08:12:44Z",
+        "transaction_hash": "1bffebf88098e73f642834ba2c89ed01be1b558389a69fa335e3f68284b8bcd9",
+        "transaction_successful": true,
         "asset_balance_changes": [
           {
             "asset_type": "native",
             "type": "transfer",
-            "from": "CCR2CH4GQVCZHG7CHFVMNANCK45CU5DVKXZIIITDZQAU3CEJZ7RQH2MQ",
-            "to": "GCXWNGYVEUUFG2HES6BOQWD7OXGR6FBW5YT2M5ABB434HGAFOSW53KOD",
-            "amount": "1002.2585230"
+            "from": "GBVBJEP2BSKHW6YBFCZR2HJKHZDLJOU7ZKTH2HSNUUQY322RWLURH3EQ",
+            "to": "CBRJK4SZPPP4TJGYMOZ575IKYMJ5RFTBY45PHVWGXRCM4MRRKXNHZCEB",
+            "amount": "500.0000000"
           },
           {
             "asset_type": "credit_alphanum4",
             "asset_code": "USDC",
-            "asset_issuer": "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN",
             "type": "transfer",
-            "from": "GCXWNGYVEUUFG2HES6BOQWD7OXGR6FBW5YT2M5ABB434HGAFOSW53KOD",
-            "to": "CCR2CH4GQVCZHG7CHFVMNANCK45CU5DVKXZIIITDZQAU3CEJZ7RQH2MQ",
-            "amount": "147.4508000"
+            "from": "CBRJK4SZPPP4TJGYMOZ575IKYMJ5RFTBY45PHVWGXRCM4MRRKXNHZCEB",
+            "to": "GBVBJEP2BSKHW6YBFCZR2HJKHZDLJOU7ZKTH2HSNUUQY322RWLURH3EQ",
+            "amount": "73.18"
           }
-        ],
-        "decoded_function": "swap_exact_input_single_hints"
+        ]
       }
     ]
   }
