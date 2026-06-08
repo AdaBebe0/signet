@@ -1,20 +1,20 @@
 {
   "aquawolf": {
     "name": "Aqua Wolf",
-    "wallet": "GCNP4JVZFDAQFBPZ76VD6YARZNURD6DIC43HMZAFGBIZ2OLEHYKEPAO2",
-    "bio": "Soroban DeFi builder. Active on Blend Protocol for collateral management.",
-    "joined": "2026-05-18"
+    "wallet": "GASAAEJC6P5UZGRLYJ2I2KYLR7RXGF44JZXDYGCFBN7T5VIHECUUEMCD",
+    "bio": "Demo persona · Soroban DeFi builder exercising Blend-style collateral flows on testnet.",
+    "joined": "2026-03-04"
   },
   "sorobuilder": {
     "name": "Soro Builder",
-    "wallet": "GCXWNGYVEUUFG2HES6BOQWD7OXGR6FBW5YT2M5ABB434HGAFOSW53KOD",
-    "bio": "DEX trader and Soroban app builder. Active on Soroswap for on-chain swaps.",
-    "joined": "2026-05-18"
+    "wallet": "GBVBJEP2BSKHW6YBFCZR2HJKHZDLJOU7ZKTH2HSNUUQY322RWLURH3EQ",
+    "bio": "Demo persona · DEX trader running Soroswap-style swaps on testnet.",
+    "joined": "2026-02-19"
   },
   "stellardev": {
     "name": "Stellar Dev",
-    "wallet": "GCD2NJKNFJFGIV7JQWAMQATB6UOTCXTLLW5L2IVQKGVLSLXDFU5NSYEW",
-    "bio": "Stellar/Soroban developer. USDC and token operations on Stellar mainnet.",
-    "joined": "2026-05-18"
+    "wallet": "GBNOH2NKPHZYOWF2LHLSZ27R54NMCH66KPBEEY6MCE4FM5V6PNZVHZKL",
+    "bio": "Demo persona · token operations and transfers on Stellar testnet.",
+    "joined": "2026-01-27"
   }
 }
