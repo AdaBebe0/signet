@@ -1,17 +1,14 @@
-// Placeholder per-contract detail page.
-// TODO(signet): render contract metadata + indexed activity for this address.
-export default async function ContractPage({
+import { permanentRedirect } from 'next/navigation';
+
+/**
+ * Legacy per-contract route. Contract detail now lives inline on the profile;
+ * redirect to the canonical profile page until a dedicated view is built.
+ */
+export default async function LegacyContractRedirect({
   params,
 }: {
   params: Promise<{ handle: string; address: string }>;
 }) {
-  const { handle, address } = await params;
-  return (
-    <div>
-      <h1>Signet — contract</h1>
-      <p>
-        route: (profile) /profile/{handle}/contract/{address}
-      </p>
-    </div>
-  );
+  const { handle } = await params;
+  permanentRedirect(`/p/${handle.toLowerCase()}`);
 }
