@@ -1,53 +1,10 @@
 import { notFound } from 'next/navigation';
-import { promises as fs } from 'fs';
-import path from 'path';
 import { SignetMonogram } from '../../(marketing)/components/signet-monogram';
+import { getProfile, getOperations, listHandles, computeStats, type Operation } from '@/lib/profiles';
 
-type Profile = {
-  name: string;
-  wallet: string;
-  bio: string;
-  joined: string;
-};
-
-type Operation = {
-  id: string;
-  type: string;
-  function?: string;
-  decoded_function?: string;
-  source_account?: string;
-  created_at: string;
-  transaction_hash?: string;
-  transaction_successful?: boolean;
-  asset_balance_changes?: Array<{
-    asset_type: string;
-    asset_code?: string;
-    type: string;
-    from?: string;
-    to?: string;
-    amount?: string;
-  }>;
-};
-
-async function getProfile(handle: string): Promise<Profile | null> {
-  try {
-    const manifestPath = path.join(process.cwd(), 'public/data/profiles.json');
-    const manifest = JSON.parse(await fs.readFile(manifestPath, 'utf-8'));
-    return manifest[handle] ?? null;
-  } catch {
-    return null;
-  }
-}
-
-async function getOperations(handle: string): Promise<Operation[]> {
-  try {
-    const opsPath = path.join(process.cwd(), 'public/data', `${handle}.json`);
-    const raw = await fs.readFile(opsPath, 'utf-8');
-    const data = JSON.parse(raw);
-    return data._embedded?.records ?? [];
-  } catch {
-    return [];
-  }
+// Pre-render the curated profiles at build time; unknown handles 404.
+export async function generateStaticParams() {
+  return (await listHandles()).map((handle) => ({ handle }));
 }
 
 function truncate(str: string, head: number, tail: number): string {
@@ -65,8 +22,12 @@ function resolveFunction(op: Operation): string {
   return 'invoke_contract';
 }
 
+// Demo profiles use synthetic data on Stellar testnet. The production build
+// renders real mainnet activity bound via the on-chain Identity Registry.
+const NETWORK = 'testnet';
+
 function stellarExpertTx(hash: string): string {
-  return `https://stellar.expert/explorer/mainnet/tx/${hash}`;
+  return `https://stellar.expert/explorer/${NETWORK}/tx/${hash}`;
 }
 
 export async function generateMetadata({ params }: { params: Promise<{ handle: string }> }) {
@@ -84,9 +45,7 @@ export default async function ProfilePage({ params }: { params: Promise<{ handle
   if (!profile) notFound();
 
   const operations = await getOperations(handle);
-  const successfulOps = operations.filter((op) => op.transaction_successful !== false);
-
-  const uniqueFunctions = new Set(successfulOps.map(resolveFunction));
+  const stats = computeStats(operations);
   const oldest = operations[operations.length - 1];
   const newest = operations[0];
 
@@ -133,7 +92,7 @@ export default async function ProfilePage({ params }: { params: Promise<{ handle
             className="text-[11px] uppercase tracking-[0.26em] text-[#5e5b51]"
             style={{ fontFamily: 'var(--font-mono)' }}
           >
-            Profile · Stellar Mainnet
+            Profile · Stellar Testnet · Demo
           </div>
 
           <h1
@@ -157,13 +116,13 @@ export default async function ProfilePage({ params }: { params: Promise<{ handle
           )}
 
           <div className="mt-7 flex items-center gap-3">
-            <span className="inline-flex items-center gap-2 px-3 py-1.5 border border-emerald-800 bg-emerald-950/30">
-              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+            <span className="inline-flex items-center gap-2 border border-amber-800 bg-amber-950/30 px-3 py-1.5">
+              <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
               <span
-                className="text-[10px] uppercase tracking-[0.22em] text-emerald-400"
+                className="text-[10px] uppercase tracking-[0.22em] text-amber-400"
                 style={{ fontFamily: 'var(--font-mono)' }}
               >
-                On-chain data · Horizon API
+                Synthetic data · Testnet demo
               </span>
             </span>
           </div>
@@ -185,7 +144,7 @@ export default async function ProfilePage({ params }: { params: Promise<{ handle
                 {truncate(profile.wallet, 8, 6)}
               </span>
               <a
-                href={`https://stellar.expert/explorer/mainnet/account/${profile.wallet}`}
+                href={`https://stellar.expert/explorer/${NETWORK}/account/${profile.wallet}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-[10px] uppercase tracking-[0.2em] text-[#8b1a1a] transition-colors hover:text-[#c2410c]"
@@ -200,10 +159,11 @@ export default async function ProfilePage({ params }: { params: Promise<{ handle
         {/* Stats */}
         <section className="mb-16">
           <SectionLabel>On-chain activity</SectionLabel>
-          <div className="mt-6 grid grid-cols-2 gap-px border border-[#1f1d19] bg-[#1f1d19] md:grid-cols-4">
+          <div className="mt-6 grid grid-cols-2 gap-px border border-[#1f1d19] bg-[#1f1d19] md:grid-cols-5">
             {[
-              { label: 'Soroban invocations', value: String(successfulOps.length) },
-              { label: 'Unique functions called', value: String(uniqueFunctions.size) },
+              { label: 'Reputation', value: `${stats.reputation}` },
+              { label: 'Soroban invocations', value: String(stats.invocations) },
+              { label: 'Unique functions called', value: String(stats.uniqueFunctions) },
               { label: 'First activity', value: oldest ? new Date(oldest.created_at).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) : '—' },
               { label: 'Latest activity', value: newest ? fmtDate(newest.created_at) : '—' },
             ].map(({ label, value }) => (
@@ -318,11 +278,11 @@ export default async function ProfilePage({ params }: { params: Promise<{ handle
               className="max-w-[680px] text-[13px] leading-[1.7] text-[#5e5b51]"
               style={{ fontFamily: 'var(--font-mono)' }}
             >
-              Operations shown are real Soroban invocations fetched from the public Stellar
-              Horizon API. Each row links to its transaction on Stellar Expert for independent
-              verification. Handle-to-wallet bindings in this demo are curated by Signet;
-              cryptographic self-attestation via an on-chain Identity Registry is planned for
-              Phase 2.
+              This is a <strong className="text-[#8a8779]">demo profile</strong> populated with
+              synthetic data on Stellar testnet — no real account&apos;s activity is shown. In
+              production, profiles render real mainnet Soroban invocations from the Horizon API,
+              each independently verifiable on Stellar Expert, with the handle→wallet binding
+              proved on-chain via the Identity Registry rather than curated.
             </p>
             <a
               href="/how-it-works"
@@ -346,7 +306,7 @@ export default async function ProfilePage({ params }: { params: Promise<{ handle
               <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#8b1a1a] opacity-60" />
               <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-[#8b1a1a]" />
             </span>
-            Stellar mainnet · live
+            Stellar testnet · demo
           </span>
         </div>
         <div
