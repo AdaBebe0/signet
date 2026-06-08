@@ -8,7 +8,8 @@
     "start": "next start -p 3000",
     "typecheck": "tsc --noEmit",
     "lint": "eslint . --config ../../eslint.config.js",
-    "test": "echo \"@signet/web: no tests yet\" && exit 0"
+    "test": "node --experimental-strip-types --test \"lib/**/*.test.ts\"",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "@creit.tech/stellar-wallets-kit": "^1.7.0",
