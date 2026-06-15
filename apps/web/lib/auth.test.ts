@@ -22,6 +22,17 @@ test('tampered or garbage session is rejected', () => {
   assert.equal(verifySession(undefined), null);
 });
 
+test('sessions issued before valid-after are revoked', () => {
+  const token = issueSession('GWALLET');
+  assert.equal(verifySession(token), 'GWALLET');
+  process.env.SIGNET_SESSIONS_VALID_AFTER = String(Date.now() + 1000);
+  try {
+    assert.equal(verifySession(token), null);
+  } finally {
+    delete process.env.SIGNET_SESSIONS_VALID_AFTER;
+  }
+});
+
 test('challenge verifies and is bound to the address', () => {
   const msg = createChallenge('GWALLET');
   assert.ok(verifyChallenge('GWALLET', msg));

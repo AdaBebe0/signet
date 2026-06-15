@@ -7,6 +7,7 @@ import { runSeedWorker } from './workers/seed.js';
 import { runDeploymentWorker } from './workers/deployment.js';
 import { runActivityWorker } from './workers/activity.js';
 import { runAttestationWorker } from './workers/attestation.js';
+import { runOperationsWorker } from './workers/operations.js';
 
 let shuttingDown = false;
 
@@ -26,6 +27,9 @@ async function tick(
 
   // Activity: refresh snapshots for tracked contracts
   await runActivityWorker(horizon);
+
+  // Operations: pull recent Soroban invocations for tracked wallets
+  await runOperationsWorker(horizon);
 
   // Persist cursor
   if (highestLedger > 0) {

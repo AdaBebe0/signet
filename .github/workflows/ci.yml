@@ -60,3 +60,31 @@ jobs:
       - name: Build wasm
         working-directory: packages/contracts
         run: cargo build --target wasm32-unknown-unknown --release
+
+  security:
+    name: dependency audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Advisory for now (does not fail the build) — flip to blocking once the
+      # tree is clean. Tighten the level to `moderate` as you triage.
+      - name: pnpm audit
+        run: pnpm audit --audit-level high || true
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: cargo audit
+        run: |
+          cargo install cargo-audit --locked || true
+          (cd packages/contracts && cargo audit) || true

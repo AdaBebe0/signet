@@ -1,11 +1,15 @@
 import { NextResponse } from 'next/server';
 import { verifyChallenge, verifySignature, issueSession, SESSION_COOKIE } from '@/lib/auth';
 import { isValidStellarAddress } from '@/lib/stellar-address';
+import { isSameOrigin } from '@/lib/security';
 import { logger } from '@/lib/logger';
 
 export const runtime = 'nodejs';
 
 export async function POST(req: Request) {
+  if (!isSameOrigin(req)) {
+    return NextResponse.json({ error: 'Cross-origin request rejected' }, { status: 403 });
+  }
   const { address, message, signature } = (await req.json().catch(() => ({}))) as {
     address?: string;
     message?: string;

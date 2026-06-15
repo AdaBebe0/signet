@@ -12,14 +12,38 @@ import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
  * single-use stored nonce — the call sites won't change.
  */
 
-const SECRET = process.env.SIGNET_AUTH_SECRET ?? 'dev-insecure-secret-change-me';
 const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const CHALLENGE_TTL_MS = 5 * 60 * 1000;
 
 export const SESSION_COOKIE = 'signet_session';
 
+/**
+ * Resolve the signing secret lazily (so a missing secret fails at request time,
+ * not at build/module-load). In production a strong secret is REQUIRED — we
+ * refuse to fall back to a known dev value, which would make sessions forgeable.
+ */
+let cachedSecret: string | null = null;
+function getSecret(): string {
+  if (cachedSecret) return cachedSecret;
+  const s = process.env.SIGNET_AUTH_SECRET;
+  if (s && s.length >= 16) return (cachedSecret = s);
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('SIGNET_AUTH_SECRET must be set (≥16 chars) in production');
+  }
+  return (cachedSecret = 'dev-insecure-secret-change-me');
+}
+
+/**
+ * Sessions issued before this epoch-ms are rejected. Bump
+ * `SIGNET_SESSIONS_VALID_AFTER` to revoke every existing session at once
+ * (stateless global logout) — e.g. after a secret rotation.
+ */
+function validAfter(): number {
+  return Number(process.env.SIGNET_SESSIONS_VALID_AFTER ?? 0);
+}
+
 const b64url = (b: Buffer): string => b.toString('base64url');
-const hmac = (data: string): Buffer => createHmac('sha256', SECRET).update(data).digest();
+const hmac = (data: string): Buffer => createHmac('sha256', getSecret()).update(data).digest();
 
 function safeEqual(a: string, b: string): boolean {
   const ab = Buffer.from(a);
@@ -74,7 +98,8 @@ export async function verifySignature(
 // ── Session ─────────────────────────────────────────────────────────────────
 
 export function issueSession(address: string): string {
-  const payload = JSON.stringify({ address, exp: Date.now() + SESSION_TTL_MS });
+  const now = Date.now();
+  const payload = JSON.stringify({ address, iat: now, exp: now + SESSION_TTL_MS });
   const data = b64url(Buffer.from(payload));
   const tag = b64url(hmac(data));
   return `${data}.${tag}`;
@@ -86,8 +111,9 @@ export function verifySession(token: string | undefined): string | null {
   if (!data || !tag) return null;
   if (!safeEqual(tag, b64url(hmac(data)))) return null;
   try {
-    const { address, exp } = JSON.parse(Buffer.from(data, 'base64url').toString());
+    const { address, iat, exp } = JSON.parse(Buffer.from(data, 'base64url').toString());
     if (typeof address !== 'string' || typeof exp !== 'number' || Date.now() > exp) return null;
+    if (typeof iat !== 'number' || iat < validAfter()) return null; // revoked
     return address;
   } catch {
     return null;

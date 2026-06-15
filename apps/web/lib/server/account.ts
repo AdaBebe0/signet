@@ -1,0 +1,95 @@
+/**
+ * Authenticated-account data layer for the dashboard.
+ *
+ * Maps a signed-in wallet (the `G…` address proven via Sign-In With Stellar) to
+ * its on-chain-bound profile and lets the owner edit the *presentation* fields
+ * (display name, bio). The handle and wallet bindings themselves are governed
+ * on-chain by the Identity Registry — they are never mutated here.
+ *
+ * The Prisma client is imported lazily so the web app keeps working without a
+ * database (the public `/p` routes don't need one); edits, however, require a
+ * configured DB and a profile that already exists from an on-chain claim.
+ */
+
+export interface Account {
+  address: string;
+  handle: string | null;
+  displayName: string | null;
+  bio: string | null;
+}
+
+export interface AccountUpdate {
+  displayName: string | null;
+  bio: string | null;
+}
+
+const MAX_DISPLAY_NAME = 80;
+const MAX_BIO = 280;
+
+async function getPrisma() {
+  if (!process.env.DATABASE_URL) return null;
+  const { prisma } = await import('@signet/db');
+  return prisma;
+}
+
+/** Resolve the signed-in wallet's account; profile fields are null until claimed. */
+export async function getAccount(address: string): Promise<Account> {
+  const prisma = await getPrisma();
+  if (!prisma) return { address, handle: null, displayName: null, bio: null };
+
+  const wallet = await prisma.wallet.findUnique({
+    where: { pubkey: address },
+    include: { profile: true },
+  });
+  const profile = wallet?.profile;
+  return {
+    address,
+    handle: profile?.handle ?? null,
+    displayName: profile?.displayName ?? null,
+    bio: profile?.bio ?? null,
+  };
+}
+
+/**
+ * Trim + length-bound the editable fields. Throws on anything too long so the
+ * caller surfaces a 4xx rather than silently truncating.
+ */
+export function normalizeAccountUpdate(raw: unknown): AccountUpdate {
+  const obj = (raw ?? {}) as { displayName?: unknown; bio?: unknown };
+  const clean = (v: unknown, max: number, field: string): string | null => {
+    if (v == null) return null;
+    const s = String(v).trim();
+    if (s.length === 0) return null;
+    if (s.length > max) throw new Error(`${field} must be ${max} characters or fewer`);
+    return s;
+  };
+  return {
+    displayName: clean(obj.displayName, MAX_DISPLAY_NAME, 'Display name'),
+    bio: clean(obj.bio, MAX_BIO, 'Bio'),
+  };
+}
+
+/** Update the signed-in wallet's profile presentation fields. */
+export async function updateAccount(address: string, update: AccountUpdate): Promise<Account> {
+  const prisma = await getPrisma();
+  if (!prisma) {
+    throw new Error('Profile editing requires a configured database');
+  }
+  const wallet = await prisma.wallet.findUnique({
+    where: { pubkey: address },
+    select: { profileId: true },
+  });
+  if (!wallet) {
+    throw new Error('No profile is bound to this wallet yet — claim a handle on-chain first');
+  }
+  const profile = await prisma.profile.update({
+    where: { id: wallet.profileId },
+    data: { displayName: update.displayName, bio: update.bio },
+  });
+  return {
+    address,
+    handle: profile.handle,
+    displayName: profile.displayName,
+    bio: profile.bio,
+  };
+}

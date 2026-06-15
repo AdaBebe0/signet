@@ -30,9 +30,30 @@ model Wallet {
 
   profile    Profile  @relation(fields: [profileId], references: [id], onDelete: Cascade)
   contracts  Contract[]
+  operations Operation[]
 
   @@index([profileId])
   @@index([pubkey])
+}
+
+// Soroban operations (invocations) attributed to a wallet, populated by the
+// indexer from Horizon. Powers the activity list on a profile.
+model Operation {
+  id              String   @id // Horizon operation id (globally unique)
+  walletId        String
+  type            String
+  function        String?
+  decodedFunction String?
+  sourceAccount   String?
+  createdAt       DateTime
+  transactionHash String?
+  successful      Boolean  @default(true)
+  balanceChanges  Json?
+  indexedAt       DateTime @default(now())
+
+  wallet          Wallet   @relation(fields: [walletId], references: [id], onDelete: Cascade)
+
+  @@index([walletId, createdAt])
 }
 
 model Contract {

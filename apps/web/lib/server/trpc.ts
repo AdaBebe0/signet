@@ -2,6 +2,9 @@ import { initTRPC } from '@trpc/server';
 import { getProfile, getOperations, listHandles, isValidHandle, computeStats } from '../profiles.ts';
 import { logger } from '../logger.ts';
 import { rateLimit } from '../rate-limit.ts';
+import { verifySession, SESSION_COOKIE } from '../auth.ts';
+import { isSameOriginHeaders } from '../security.ts';
+import { getAccount, updateAccount, normalizeAccountUpdate } from './account.ts';
 
 /**
  * tRPC server setup.
@@ -43,7 +46,7 @@ const observed = t.procedure.use(async ({ ctx, path, type, next }) => {
 
 /** Per-ip rate limit on top of logging. */
 const publicProcedure = observed.use(async ({ ctx, path, next }) => {
-  const { ok, remaining } = rateLimit(`${ctx.ip}:${path}`);
+  const { ok, remaining } = await rateLimit(`${ctx.ip}:${path}`);
   if (!ok) {
     logger.warn({ requestId: ctx.requestId, path, ip: ctx.ip }, 'trpc.rateLimited');
     throw new Error('Too many requests');
@@ -53,6 +56,33 @@ const publicProcedure = observed.use(async ({ ctx, path, next }) => {
 });
 
 export { publicProcedure };
+
+/** Read + verify the session cookie from the request headers (returns the G… address). */
+function sessionAddress(headers: Headers): string | null {
+  const cookie = headers.get('cookie');
+  if (!cookie) return null;
+  const prefix = `${SESSION_COOKIE}=`;
+  const part = cookie
+    .split(';')
+    .map((c) => c.trim())
+    .find((c) => c.startsWith(prefix));
+  if (!part) return null;
+  return verifySession(decodeURIComponent(part.slice(prefix.length)));
+}
+
+/**
+ * Authenticated procedure: requires a valid session cookie and exposes the
+ * caller's `address` on the context. Mutations additionally enforce a
+ * same-origin check (CSRF defense on top of the SameSite=Lax session cookie).
+ */
+const protectedProcedure = publicProcedure.use(async ({ ctx, type, next }) => {
+  if (type === 'mutation' && !isSameOriginHeaders(ctx.headers)) {
+    throw new Error('Cross-origin request rejected');
+  }
+  const address = sessionAddress(ctx.headers);
+  if (!address) throw new Error('Unauthorized');
+  return next({ ctx: { ...ctx, address } });
+});
 
 /** Lightweight validator: ensures a well-formed handle without a schema lib. */
 function handleInput(raw: unknown): { handle: string } {
@@ -78,9 +108,19 @@ const profileRouter = router({
   }),
 });
 
+/** Authenticated account surface backing the dashboard. */
+const accountRouter = router({
+  me: protectedProcedure.query(({ ctx }) => getAccount(ctx.address)),
+
+  update: protectedProcedure
+    .input(normalizeAccountUpdate)
+    .mutation(({ ctx, input }) => updateAccount(ctx.address, input)),
+});
+
 export const appRouter = router({
   health: publicProcedure.query(() => ({ ok: true, service: 'signet', ts: Date.now() })),
   profile: profileRouter,
+  account: accountRouter,
 });
 
 export type AppRouter = typeof appRouter;

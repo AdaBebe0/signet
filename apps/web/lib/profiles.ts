@@ -68,6 +68,9 @@ export async function getProfile(handle: string): Promise<Profile | null> {
 
 export async function getOperations(handle: string): Promise<Operation[]> {
   if (!isValidHandle(handle)) return [];
+  // Prefer indexer-populated DB rows; fall back to the static demo JSON.
+  const fromDb = await safeDbOperations(handle);
+  if (fromDb && fromDb.length > 0) return fromDb;
   const data = await readJson<{ _embedded?: { records?: Operation[] } }>(`${handle}.json`);
   return data?._embedded?.records ?? [];
 }
@@ -123,6 +126,44 @@ export async function safeDbProfile(handle: string): Promise<Profile | null> {
       bio: row.bio ?? '',
       joined: row.createdAt.toISOString().slice(0, 10),
     };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Best-effort lookup of indexer-populated operations for a handle. Returns null
+ * on any failure (no DB, unreachable, error) so `getOperations` falls back to
+ * the static JSON. Maps DB rows to the Horizon-shaped `Operation` the UI uses.
+ */
+export async function safeDbOperations(handle: string): Promise<Operation[] | null> {
+  if (!process.env.DATABASE_URL || !isValidHandle(handle)) return null;
+  try {
+    const { prisma } = await import('@signet/db');
+    const profile = await prisma.profile.findUnique({
+      where: { handle: handle.toLowerCase() },
+      include: {
+        wallets: {
+          include: { operations: { orderBy: { createdAt: 'desc' }, take: 100 } },
+        },
+      },
+    });
+    if (!profile) return null;
+    return profile.wallets
+      .flatMap((w) => w.operations)
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+      .map((op) => ({
+        id: op.id,
+        type: op.type,
+        function: op.function ?? undefined,
+        decoded_function: op.decodedFunction ?? undefined,
+        source_account: op.sourceAccount ?? undefined,
+        created_at: op.createdAt.toISOString(),
+        transaction_hash: op.transactionHash ?? undefined,
+        transaction_successful: op.successful,
+        asset_balance_changes:
+          (op.balanceChanges as unknown as Operation['asset_balance_changes']) ?? undefined,
+      }));
   } catch {
     return null;
   }
