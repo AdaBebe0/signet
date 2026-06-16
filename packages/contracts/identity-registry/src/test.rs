@@ -165,7 +165,7 @@ fn claim_emits_event() {
     let handle = String::from_str(&env, "aquawolf");
     client.claim(&handle, &Address::generate(&env));
     // At least one event was published by the claim.
-    assert!(!env.events().all().is_empty());
+    assert!(!env.events().all().events().is_empty());
 }
 
 #[test]

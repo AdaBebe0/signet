@@ -11,10 +11,10 @@ Rust/Soroban smart contracts for Signet, managed as a Cargo workspace
 ## Prerequisites
 
 - Rust (stable) — https://rustup.rs
-- `wasm32-unknown-unknown` target:
+- `wasm32v1-none` target:
 
   ```bash
-  rustup target add wasm32-unknown-unknown
+  rustup target add wasm32v1-none
   ```
 
 - (Optional) Soroban CLI for deployment:
@@ -32,5 +32,5 @@ cargo test --manifest-path packages/contracts/Cargo.toml
 # Wasm build (deployment artifact)
 cargo build \
   --manifest-path packages/contracts/identity-registry/Cargo.toml \
-  --target wasm32-unknown-unknown --release
+  --target wasm32v1-none --release
 ```

@@ -1,85 +1,58 @@
 'use client';
 
 /**
- * Stellar Wallets Kit integration.
+ * Stellar Wallets Kit integration (v2).
  *
  * Wraps `@creit.tech/stellar-wallets-kit` (Freighter, xBull, Albedo, …) behind
- * a small, lazily-loaded API. The kit is browser-only, so it is imported on
- * first use rather than at module scope — this keeps it out of the server
- * bundle and avoids SSR crashes.
+ * a small, lazily-loaded API. The kit is browser-only, so it is imported and
+ * initialised on first use rather than at module scope — this keeps it out of
+ * the server bundle and avoids SSR crashes.
+ *
+ * v2 exposes `StellarWalletsKit` as a *static* class configured once via
+ * `init(...)`, so we guard initialisation behind `ensureInit()` and call the
+ * static methods directly.
  */
 
 const NETWORK = (process.env.NEXT_PUBLIC_STELLAR_NETWORK ?? 'testnet').toLowerCase();
+const IS_MAINNET = NETWORK === 'mainnet' || NETWORK === 'public';
 
-export const NETWORK_PASSPHRASE =
-  NETWORK === 'mainnet' || NETWORK === 'public'
-    ? 'Public Global Stellar Network ; September 2015'
-    : 'Test SDF Network ; September 2015';
-
-// Minimal shape of the kit surface we use — avoids leaking the full type.
-interface WalletKit {
-  openModal(opts: {
-    onWalletSelected: (option: { id: string }) => void | Promise<void>;
-    onClosed?: (err: Error) => void;
-  }): Promise<void>;
-  setWallet(id: string): void;
-  getAddress(): Promise<{ address: string }>;
-  signTransaction(
-    xdr: string,
-    opts: { address?: string; networkPassphrase?: string },
-  ): Promise<{ signedTxXdr: string; signerAddress?: string }>;
-  signMessage(
-    message: string,
-    opts: { address?: string },
-  ): Promise<{ signedMessage: string; signerAddress?: string }>;
-  disconnect(): Promise<void>;
-}
-
-let kitPromise: Promise<WalletKit> | null = null;
-
-async function getKit(): Promise<WalletKit> {
-  if (typeof window === 'undefined') {
-    throw new Error('[wallet] wallet kit is browser-only');
-  }
-  if (!kitPromise) {
-    kitPromise = (async () => {
-      const mod = await import('@creit.tech/stellar-wallets-kit');
-      const { StellarWalletsKit, WalletNetwork, allowAllModules } = mod;
-      const network =
-        NETWORK === 'mainnet' || NETWORK === 'public'
-          ? WalletNetwork.PUBLIC
-          : WalletNetwork.TESTNET;
-      return new StellarWalletsKit({
-        network,
-        modules: allowAllModules(),
-      }) as unknown as WalletKit;
-    })();
-  }
-  return kitPromise;
-}
+export const NETWORK_PASSPHRASE = IS_MAINNET
+  ? 'Public Global Stellar Network ; September 2015'
+  : 'Test SDF Network ; September 2015';
 
 const STORAGE_KEY = 'signet:wallet-id';
 
+// Resolved once: dynamically import the kit, register the default wallet
+// modules, and set the network. Subsequent calls reuse the same promise.
+let initPromise: Promise<typeof import('@creit.tech/stellar-wallets-kit').StellarWalletsKit> | null =
+  null;
+
+async function ensureInit() {
+  if (typeof window === 'undefined') {
+    throw new Error('[wallet] wallet kit is browser-only');
+  }
+  if (!initPromise) {
+    initPromise = (async () => {
+      const { StellarWalletsKit, Networks } = await import('@creit.tech/stellar-wallets-kit');
+      const { defaultModules } = await import('@creit.tech/stellar-wallets-kit/modules/utils');
+      StellarWalletsKit.init({
+        modules: defaultModules(),
+        network: IS_MAINNET ? Networks.PUBLIC : Networks.TESTNET,
+      });
+      return StellarWalletsKit;
+    })();
+  }
+  return initPromise;
+}
+
 /** Open the wallet-selection modal and return the connected G… address. */
 export async function connectWallet(): Promise<string> {
-  const kit = await getKit();
-  return new Promise<string>((resolve, reject) => {
-    kit
-      .openModal({
-        onWalletSelected: async (option) => {
-          try {
-            kit.setWallet(option.id);
-            window.localStorage.setItem(STORAGE_KEY, option.id);
-            const { address } = await kit.getAddress();
-            resolve(address);
-          } catch (err) {
-            reject(err instanceof Error ? err : new Error(String(err)));
-          }
-        },
-        onClosed: (err) => reject(err ?? new Error('Wallet selection cancelled')),
-      })
-      .catch(reject);
-  });
+  const kit = await ensureInit();
+  const { address } = await kit.authModal();
+  // Persist the user's choice so we can restore the session on reload.
+  const id = kit.selectedModule?.productId;
+  if (id) window.localStorage.setItem(STORAGE_KEY, id);
+  return address;
 }
 
 /** Restore a previously-selected wallet and return its address, if any. */
@@ -88,9 +61,11 @@ export async function getConnectedAddress(): Promise<string | null> {
   const id = window.localStorage.getItem(STORAGE_KEY);
   if (!id) return null;
   try {
-    const kit = await getKit();
+    const kit = await ensureInit();
     kit.setWallet(id);
-    const { address } = await kit.getAddress();
+    // `fetchAddress` re-reads from the wallet module (needed after a reload,
+    // when the in-memory address is empty).
+    const { address } = await kit.fetchAddress();
     return address;
   } catch {
     return null;
@@ -100,7 +75,7 @@ export async function getConnectedAddress(): Promise<string | null> {
 export async function disconnectWallet(): Promise<void> {
   window.localStorage.removeItem(STORAGE_KEY);
   try {
-    const kit = await getKit();
+    const kit = await ensureInit();
     await kit.disconnect();
   } catch {
     /* already disconnected */
@@ -109,7 +84,7 @@ export async function disconnectWallet(): Promise<void> {
 
 /** Sign a base64 transaction envelope with the connected wallet. */
 export async function signTransaction(xdr: string, address: string): Promise<string> {
-  const kit = await getKit();
+  const kit = await ensureInit();
   const { signedTxXdr } = await kit.signTransaction(xdr, {
     address,
     networkPassphrase: NETWORK_PASSPHRASE,
@@ -119,7 +94,7 @@ export async function signTransaction(xdr: string, address: string): Promise<str
 
 /** Sign an arbitrary message; returns the base64 signature. */
 export async function signMessage(message: string, address: string): Promise<string> {
-  const kit = await getKit();
+  const kit = await ensureInit();
   const { signedMessage } = await kit.signMessage(message, { address });
   return signedMessage;
 }

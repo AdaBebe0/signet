@@ -41,14 +41,14 @@ cargo test --manifest-path packages/contracts/identity-registry/Cargo.toml
 
 cargo build \
   --manifest-path packages/contracts/identity-registry/Cargo.toml \
-  --target wasm32-unknown-unknown --release
+  --target wasm32v1-none --release
 ```
 
 ## Deploy (testnet)
 
 ```bash
 stellar contract deploy \
-  --wasm target/wasm32-unknown-unknown/release/identity_registry.wasm \
+  --wasm target/wasm32v1-none/release/identity_registry.wasm \
   --network testnet --source <KEY>
 # then invoke initialize(admin) and set NEXT_PUBLIC_IDENTITY_REGISTRY_ID in the web app.
 ```

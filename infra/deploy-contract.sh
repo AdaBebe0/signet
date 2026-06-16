@@ -16,10 +16,10 @@ ACCOUNT="${STELLAR_ACCOUNT:-deployer}"
 ADMIN="${ADMIN_ADDRESS:-}"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 CONTRACTS="$ROOT/packages/contracts"
-WASM="$CONTRACTS/target/wasm32-unknown-unknown/release/identity_registry.wasm"
+WASM="$CONTRACTS/target/wasm32v1-none/release/identity_registry.wasm"
 
 echo "→ Building wasm (release)…"
-( cd "$CONTRACTS" && cargo build --target wasm32-unknown-unknown --release )
+( cd "$CONTRACTS" && cargo build --target wasm32v1-none --release )
 
 echo "→ Optimizing…"
 stellar contract optimize --wasm "$WASM" || true

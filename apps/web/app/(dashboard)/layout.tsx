@@ -20,8 +20,8 @@ function truncate(a: string): string {
   return a.length > 12 ? `${a.slice(0, 5)}…${a.slice(-4)}` : a;
 }
 
-export default function DashboardLayout({ children }: { children: React.ReactNode }) {
-  const token = cookies().get(SESSION_COOKIE)?.value;
+export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
+  const token = (await cookies()).get(SESSION_COOKIE)?.value;
   const address = verifySession(token);
 
   return (

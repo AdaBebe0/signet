@@ -42,7 +42,7 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@stable
         with:
-          targets: wasm32-unknown-unknown
+          targets: wasm32v1-none
 
       - name: Cache cargo
         uses: actions/cache@v5
@@ -59,7 +59,7 @@ jobs:
 
       - name: Build wasm
         working-directory: packages/contracts
-        run: cargo build --target wasm32-unknown-unknown --release
+        run: cargo build --target wasm32v1-none --release
 
   security:
     name: dependency audit

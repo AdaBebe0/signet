@@ -7,10 +7,11 @@ export const contentType = 'image/png';
 
 // Social card for a profile — makes the "citable record" actually shareable.
 // Uses system fonts only (no network fetch) so it renders in any build env.
-export default async function OgImage({ params }: { params: { handle: string } }) {
-  const profile = await getProfile(params.handle);
-  const stats = profile ? computeStats(await getOperations(params.handle)) : null;
-  const name = profile?.name ?? params.handle;
+export default async function OgImage({ params }: { params: Promise<{ handle: string }> }) {
+  const { handle } = await params;
+  const profile = await getProfile(handle);
+  const stats = profile ? computeStats(await getOperations(handle)) : null;
+  const name = profile?.name ?? handle;
 
   return new ImageResponse(
     (
@@ -34,7 +35,7 @@ export default async function OgImage({ params }: { params: { handle: string } }
 
         <div style={{ display: 'flex', flexDirection: 'column' }}>
           <div style={{ fontSize: 88, fontWeight: 700, letterSpacing: -2 }}>{name}</div>
-          <div style={{ fontSize: 30, color: '#8a8779', marginTop: 8 }}>@{params.handle}</div>
+          <div style={{ fontSize: 30, color: '#8a8779', marginTop: 8 }}>@{handle}</div>
         </div>
 
         <div style={{ display: 'flex', gap: 64, fontSize: 26, color: '#b8b5a8' }}>

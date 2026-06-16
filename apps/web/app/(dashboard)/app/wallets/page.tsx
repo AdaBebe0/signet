@@ -1,12 +1,80 @@
-import { DashboardPanel } from '../../../(dashboard)/layout';
+import { currentAddress } from '@/lib/server/session';
+import { getAccountWallets } from '@/lib/server/account';
 
-export default function WalletsPage() {
+function truncate(a: string): string {
+  return a.length > 18 ? `${a.slice(0, 8)}…${a.slice(-6)}` : a;
+}
+
+const mono = { fontFamily: 'var(--font-mono)' } as const;
+const display = { fontFamily: 'var(--font-display)' } as const;
+const NETWORK = (process.env.NEXT_PUBLIC_STELLAR_NETWORK ?? 'testnet').toLowerCase();
+const EXPLORER = NETWORK === 'mainnet' || NETWORK === 'public' ? 'public' : 'testnet';
+
+export default async function WalletsPage() {
+  const address = await currentAddress();
+  const wallets = address ? await getAccountWallets(address) : [];
+
   return (
-    <DashboardPanel title="Wallets">
-      Link the deployment wallets you control. Each link is a signed proof of
-      ownership written to the on-chain Identity Registry, so the contracts a
-      wallet has deployed can be attributed to your handle. Wallet linking opens
-      in Phase 2.
-    </DashboardPanel>
+    <section>
+      <h1 className="text-[40px] font-bold leading-[0.96] tracking-[-0.025em] md:text-[56px]" style={display}>
+        Wallets
+      </h1>
+
+      <p className="mt-6 max-w-[640px] text-[14px] leading-[1.7] text-[#8a8779]" style={mono}>
+        Wallets linked to your handle. Each binding is a signed proof of ownership written to the
+        on-chain Identity Registry, so the contracts a wallet has deployed are attributed to you.
+      </p>
+
+      <div className="mt-8 max-w-[640px] border border-[#1f1d19]">
+        {wallets.length === 0 ? (
+          <p className="px-6 py-6 text-[13px] leading-[1.7] text-[#5e5b51]" style={mono}>
+            No wallets are linked yet. Claim a handle on-chain and the indexer will attribute the
+            signing wallet here automatically.
+          </p>
+        ) : (
+          wallets.map((w, i) => (
+            <div
+              key={w.pubkey}
+              className={`flex flex-wrap items-center justify-between gap-4 px-6 py-4 ${
+                i < wallets.length - 1 ? 'border-b border-[#1f1d19]' : ''
+              }`}
+            >
+              <div className="flex items-center gap-3">
+                <span className="text-[13px] text-[#b8b5a8]" style={mono} title={w.pubkey}>
+                  {truncate(w.pubkey)}
+                </span>
+                {w.isPrimary && (
+                  <span className="border border-[#1f1d19] px-2 py-0.5 text-[9px] uppercase tracking-[0.18em] text-[#8a8779]" style={mono}>
+                    Primary
+                  </span>
+                )}
+                <span
+                  className={`text-[9px] uppercase tracking-[0.18em] ${
+                    w.source === 'onchain' ? 'text-emerald-500' : 'text-[#5e5b51]'
+                  }`}
+                  style={mono}
+                >
+                  {w.source === 'onchain' ? '● on-chain' : '○ curated'}
+                </span>
+              </div>
+              <a
+                href={`https://stellar.expert/explorer/${EXPLORER}/account/${w.pubkey}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-[10px] uppercase tracking-[0.2em] text-[#8b1a1a] transition-colors hover:text-[#c2410c]"
+                style={mono}
+              >
+                Explorer ↗
+              </a>
+            </div>
+          ))
+        )}
+      </div>
+
+      <p className="mt-4 max-w-[640px] text-[12px] leading-[1.7] text-[#5e5b51]" style={mono}>
+        To link an additional wallet, claim a handle from it in the Identity Registry — bindings are
+        created on-chain, never from this dashboard.
+      </p>
+    </section>
   );
 }

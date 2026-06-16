@@ -23,6 +23,14 @@ export interface AccountUpdate {
   bio: string | null;
 }
 
+export interface LinkedWallet {
+  pubkey: string;
+  isPrimary: boolean;
+  /** 'onchain' once attested via the Identity Registry, else 'curated'. */
+  source: string;
+  attestedAt: string;
+}
+
 const MAX_DISPLAY_NAME = 80;
 const MAX_BIO = 280;
 
@@ -48,6 +56,27 @@ export async function getAccount(address: string): Promise<Account> {
     displayName: profile?.displayName ?? null,
     bio: profile?.bio ?? null,
   };
+}
+
+/** All wallets bound to the signed-in account's profile (primary first). */
+export async function getAccountWallets(address: string): Promise<LinkedWallet[]> {
+  const prisma = await getPrisma();
+  if (!prisma) return [];
+  const self = await prisma.wallet.findUnique({
+    where: { pubkey: address },
+    select: { profileId: true },
+  });
+  if (!self) return [];
+  const wallets = await prisma.wallet.findMany({
+    where: { profileId: self.profileId },
+    orderBy: [{ isPrimary: 'desc' }, { attestedAt: 'asc' }],
+  });
+  return wallets.map((w) => ({
+    pubkey: w.pubkey,
+    isPrimary: w.isPrimary,
+    source: w.source,
+    attestedAt: w.attestedAt.toISOString().slice(0, 10),
+  }));
 }
 
 /**
