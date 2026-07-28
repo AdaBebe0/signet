@@ -127,6 +127,14 @@ export function ConnectWallet({
         : truncate(address)
       : 'Connect wallet';
 
+  const actionLabel = busy
+    ? `${variant === 'cta' ? 'Claiming handle' : 'Connecting wallet'}…`
+    : address
+      ? variant === 'cta'
+        ? 'Claim your handle'
+        : `Disconnect ${address}`
+      : 'Connect wallet';
+
   // Show claim form
   if (showClaimForm && address) {
     return (
@@ -175,6 +183,8 @@ export function ConnectWallet({
         </div>
         {status && (
           <span
+            role="status"
+            aria-live="polite"
             className="max-w-[260px] text-[10px] leading-tight text-[#8a8779]"
             style={{ fontFamily: 'var(--font-mono)' }}
           >
@@ -191,7 +201,8 @@ export function ConnectWallet({
         type="button"
         onClick={variant === 'cta' ? onClaimClick : address ? onDisconnect : onConnect}
         disabled={busy}
-        className={className}
+        className={`${className} focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#8b1a1a] focus-visible:ring-offset-2 focus-visible:ring-offset-[#0a0908]`}
+        aria-label={actionLabel}
         aria-busy={busy}
       >
         {variant === 'cta' ? (
@@ -210,6 +221,8 @@ export function ConnectWallet({
       </button>
       {status && (
         <span
+          role="status"
+          aria-live="polite"
           className="max-w-[260px] text-[10px] leading-tight text-[#8a8779]"
           style={{ fontFamily: 'var(--font-mono)' }}
         >
