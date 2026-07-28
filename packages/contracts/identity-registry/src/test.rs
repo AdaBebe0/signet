@@ -139,6 +139,9 @@ fn admin_revoke_removes_binding() {
     client.claim(&handle, &Address::generate(&env));
 
     client.admin_revoke(&handle);
+    // `env.events()` only reflects the most recent invocation, so the `revoked` event
+    // must be asserted before any further client call.
+    assert!(!env.events().all().events().is_empty());
     assert!(!client.is_bound(&handle));
 }
 
