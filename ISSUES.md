@@ -502,7 +502,7 @@ milestones, and a fix-log of resolved issues with their regression tests.
 
 # H · Documentation
 
-Filed 2026-07-30 as GitHub issues #117–#126. These strengthen what an outsider can
+Filed 2026-07-30 as GitHub issues #127–#136. These strengthen what an outsider can
 learn, verify and reproduce from the repo alone. None of them change a runtime
 capability.
 
