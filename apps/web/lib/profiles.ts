@@ -1,6 +1,6 @@
 import { promises as fs } from 'fs';
 import path from 'path';
-import { isValidHandle } from '@signet/types';
+import { DEMO_PROFILES, isValidHandle } from '@signet/types';
 import {
   ALLOW_HTTP,
   NETWORK_PASSPHRASE,
@@ -17,7 +17,10 @@ import {
  *   1. database — indexer-synced bindings, when a `DATABASE_URL` is configured
  *   2. chain    — a live `resolve(handle)` read against the Identity Registry
  *                 over Soroban RPC, when the contract is deployed
- *   3. static   — the curated demo manifest in `public/data/`
+ *   3. static   — the curated demo personas, `DEMO_PROFILES` from
+ *                 `@signet/types`. That is the one shared source the indexer
+ *                 seed (`apps/indexer/src/seed-data.ts`) also derives from, so
+ *                 demo addresses live in exactly one place.
  *
  * The chain layer is what lets a handle claimed on-chain render at
  * `/p/{handle}` before (or without) the indexer syncing it into Postgres —
@@ -62,10 +65,18 @@ export type Operation = {
   }>;
 };
 
-/** Shape of an entry in `public/data/profiles.json` — provenance is implied. */
-type ManifestProfile = Omit<Profile, 'source'>;
-
 const DATA_DIR = path.join(process.cwd(), 'public/data');
+
+/**
+ * The curated demo manifest, keyed by handle, built from the shared source in
+ * `@signet/types` so the indexer seed and the web app can never drift apart.
+ */
+const DEMO_MANIFEST: Record<string, Profile> = Object.fromEntries(
+  DEMO_PROFILES.map((p) => [
+    p.handle,
+    { name: p.name, wallet: p.wallet, bio: p.bio, joined: p.joined, source: 'demo' as const },
+  ]),
+);
 
 // Handle rules live in @signet/types, mirrored from the on-chain registry.
 // Re-exported here so existing callers keep importing it from this module.
@@ -92,8 +103,7 @@ export async function getProfile(handle: string): Promise<Profile | null> {
   // renders instead of 404ing.
   const fromChain = await safeChainProfile(handle);
   if (fromChain) return fromChain;
-  const entry = (await readJson<Record<string, ManifestProfile>>('profiles.json'))?.[handle];
-  return entry ? { ...entry, source: 'demo' } : null;
+  return DEMO_MANIFEST[handle] ?? null;
 }
 
 export async function getOperations(handle: string): Promise<Operation[]> {
@@ -149,8 +159,7 @@ export function computeStats(operations: Operation[] | null | undefined): Profil
 }
 
 export async function listHandles(): Promise<string[]> {
-  const manifest = await readJson<Record<string, Profile>>('profiles.json');
-  return manifest ? Object.keys(manifest) : [];
+  return Object.keys(DEMO_MANIFEST);
 }
 
 /**

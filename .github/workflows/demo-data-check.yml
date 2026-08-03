@@ -13,6 +13,7 @@ on:
   push:
     branches: [main]
     paths:
+      - 'packages/types/src/index.ts'
       - 'apps/web/public/data/**'
       - 'scripts/check-demo-wallets.mjs'
       - '.github/workflows/demo-data-check.yml'
@@ -29,7 +30,7 @@ jobs:
           node-version: 22
 
       - name: Check demo wallets resolve on Horizon
-        run: node scripts/check-demo-wallets.mjs
+        run: node --experimental-strip-types scripts/check-demo-wallets.mjs
         env:
           # Demo data is synthetic Stellar testnet; override with a repo variable
           # if the demo personas are ever backed on another network.

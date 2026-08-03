@@ -38,7 +38,7 @@ Signet is a verifiable developer career record built on Stellar/Soroban. Develop
 
 - **Deploy the registry** to testnet/mainnet and set `NEXT_PUBLIC_IDENTITY_REGISTRY_ID` to make claims live.
 - **Run the indexer** against a Postgres instance to populate full deployment/activity history; `/p` already has a DB-with-static-fallback loader (`safeDbProfile`).
-- **Self-sovereign bindings** replace the curated `profiles.json` mapping once claims are live.
+- **Self-sovereign bindings** replace the curated `DEMO_PROFILES` mapping once claims are live.
 - **Developer dashboard** (`/app/*`) — currently an honest read-only preview pending wallet auth.
 - **Reputation scoring** — attestations, TVL tracking, incident records.
 

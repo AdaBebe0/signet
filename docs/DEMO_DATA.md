@@ -55,13 +55,11 @@ guaranteed to resolve on `horizon-testnet.stellar.org`.
 | `sorobuilder` | Soro Builder | `GBVBJEP2BSKHW6YBFCZR2HJKHZDLJOU7ZKTH2HSNUUQY322RWLURH3EQ` | Soroswap-style DEX swaps |
 | `stellardev` | Stellar Dev | `GBNOH2NKPHZYOWF2LHLSZ27R54NMCH66KPBEEY6MCE4FM5V6PNZVHZKL` | USDC token transfers |
 
-Addresses are duplicated today in:
-
-- `apps/web/public/data/profiles.json` (web SSG manifest)
-- `apps/indexer/src/seed-data.ts` (indexer seed)
-
-Keep them identical until [#57](https://github.com/blockchain-maxis/signet/issues/57)
-collapses them to one shared source.
+Addresses live in exactly one place: `DEMO_PROFILES` in
+`packages/types/src/index.ts`. Both consumers derive from it —
+`apps/web/lib/profiles.ts` (the static profile layer) and
+`apps/indexer/src/seed-data.ts` (the indexer seed) — so they cannot drift.
+Edit a persona there and both follow.
 
 Operation rows in `apps/web/public/data/{handle}.json` are **Horizon-shaped
 fixture records** (ids, timestamps, decoded function names, balance changes)
@@ -74,36 +72,37 @@ as proof of chain inclusion while the profile is still synthetic.
 ## File layout
 
 ```
+packages/types/src/
+  index.ts            # DEMO_PROFILES — handle, name, wallet, bio, joined
+
 apps/web/public/data/
-  profiles.json       # handle → { name, wallet, bio, joined }
   aquawolf.json       # Horizon-shaped operations for aquawolf
   sorobuilder.json
   stellardev.json
 ```
 
-`apps/web/lib/profiles.ts` reads this directory. With no `DATABASE_URL` (or
-an empty DB), `/p/{handle}` is entirely fixture-driven.
+`apps/web/lib/profiles.ts` builds its profile manifest from `DEMO_PROFILES` and
+reads the operation fixtures from `public/data/`. With no `DATABASE_URL` (or an
+empty DB) and no deployed registry, `/p/{handle}` is entirely fixture-driven.
 
 ---
 
-## JSON schema
+## Schemas
 
-### `profiles.json`
+### `DEMO_PROFILES` (`packages/types/src/index.ts`)
 
-```json
+```ts
 {
-  "<handle>": {
-    "name": "string — display name",
-    "wallet": "string — G… Stellar public key",
-    "bio": "string — must identify the persona as demo",
-    "joined": "string — ISO date YYYY-MM-DD"
-  }
+  handle: string;  // [a-z0-9_-]{1,32} — same charset as the on-chain registry
+  name: string;    // display name
+  wallet: string;  // G… Stellar public key
+  bio: string;     // must identify the persona as demo
+  joined: string;  // ISO date YYYY-MM-DD
 }
 ```
 
-- `handle` keys: `[a-z0-9_-]{1,32}` (same charset as the on-chain registry).
-- `bio` should include the words "Demo persona" (or equivalent) so a raw JSON
-  reader still sees the honesty signal.
+- `bio` should include the words "Demo persona" (or equivalent) so anyone
+  reading the source still sees the honesty signal.
 
 ### `{handle}.json` (operations fixture)
 
@@ -118,7 +117,7 @@ Mirrors a Horizon operations collection page:
         "type": "invoke_host_function",
         "function": "HostFunctionTypeHostFunctionTypeInvokeContract",
         "decoded_function": "string — human-readable contract fn",
-        "source_account": "string — must equal profiles.json wallet",
+        "source_account": "string — must equal the persona's DEMO_PROFILES wallet",
         "created_at": "string — ISO-8601 timestamp",
         "transaction_hash": "string — 64-char hex",
         "transaction_successful": true,
@@ -152,11 +151,11 @@ The TypeScript shape consumed by the UI is `Operation` in
 ### Update an existing handle (manual, current path)
 
 1. Edit `apps/web/public/data/{handle}.json`. Keep the Horizon envelope
-   (`_embedded.records`). Keep `source_account` equal to the wallet in
-   `profiles.json`.
-2. If the wallet or bio changes, update **both**
-   `apps/web/public/data/profiles.json` and
-   `apps/indexer/src/seed-data.ts`.
+   (`_embedded.records`). Keep `source_account` equal to the persona's wallet
+   in `DEMO_PROFILES`.
+2. If the wallet or bio changes, edit `DEMO_PROFILES` in
+   `packages/types/src/index.ts` — the web app and the indexer seed both
+   derive from it, so there is nothing else to keep in step.
 3. Confirm every UI surface still shows the synthetic badge
    (`pnpm --filter @signet/web dev`, open `/p/{handle}`).
 4. Do **not** add explorer links for fixture wallets or tx hashes.
@@ -164,13 +163,13 @@ The TypeScript shape consumed by the UI is `Operation` in
 ### Add a new demo handle
 
 1. Choose a free handle matching `[a-z0-9_-]{1,32}`.
-2. Add an entry to `profiles.json` with a demo bio and a synthetic `G…`
-   wallet (generate with `stellar keys generate <alias> --network testnet`
-   or any ed25519 tool — **do not** reuse a real person's address).
+2. Add an entry to `DEMO_PROFILES` (`packages/types/src/index.ts`) with a demo
+   bio and a synthetic `G…` wallet (generate with
+   `stellar keys generate <alias> --network testnet` or any ed25519 tool —
+   **do not** reuse a real person's address).
 3. Create `apps/web/public/data/{handle}.json` with at least one
    Horizon-shaped record whose `source_account` matches the wallet.
-4. Mirror the profile in `apps/indexer/src/seed-data.ts`.
-5. Smoke-check `/p/{handle}` and the landing demos section if you add a card.
+4. Smoke-check `/p/{handle}` and the landing demos section if you add a card.
 
 ### Preferred future path (issue #56)
 
@@ -180,7 +179,7 @@ When `scripts/seed-testnet-demo.ts` exists:
    (including an optional registry `claim`).
 2. Dump each account's real Horizon operations into
    `public/data/{handle}.json`.
-3. Update `profiles.json` / seed data with the funded public keys.
+3. Update `DEMO_PROFILES` with the funded public keys.
 4. At that point explorer links become valid **only if** the UI still labels
    the profiles as demo personas (synthetic identity, real testnet ops) —
    or the handle graduates (next section).
@@ -200,12 +199,12 @@ true:
 
 **What to do on graduation:**
 
-1. Remove the handle from `apps/web/public/data/profiles.json` (and delete
-   `{handle}.json` if it only held fixtures).
-2. Remove the matching row from `apps/indexer/src/seed-data.ts`.
-3. Drop the synthetic badge for that profile — chain-bound renders use real
+1. Remove the handle from `DEMO_PROFILES` (and delete
+   `apps/web/public/data/{handle}.json` if it only held fixtures). The indexer
+   seed follows automatically.
+2. Drop the synthetic badge for that profile — chain-bound renders use real
    activity and may link to explorers.
-4. Leave handles that are still curated demos in the fixture set with full
+3. Leave handles that are still curated demos in the fixture set with full
    labelling.
 
 Until graduation, curated handles stay fixtures even if a coincidentally
@@ -217,6 +216,5 @@ similar address appears on testnet.
 
 - [ ] Synthetic badge visible on `/p/{handle}` for every fixture handle
 - [ ] No explorer link treats a fixture wallet/tx as a live account
-- [ ] `profiles.json` wallet === each record's `source_account`
-- [ ] `seed-data.ts` matches `profiles.json`
+- [ ] `DEMO_PROFILES` wallet === each record's `source_account`
 - [ ] Bios still say the persona is a demo

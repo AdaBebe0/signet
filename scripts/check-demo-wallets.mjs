@@ -1,35 +1,28 @@
 #!/usr/bin/env node
-// Demo-data guard: verifies every demo wallet in
-// apps/web/public/data/profiles.json still resolves on Horizon, so a demo
-// persona whose account has stopped resolving surfaces loudly instead of
-// silently breaking its profile page. Exits non-zero (naming each offender)
-// when any wallet 404s or Horizon is unreachable.
+// Demo-data guard: verifies every demo wallet in `DEMO_PROFILES` still
+// resolves on Horizon, so a demo persona whose account has stopped resolving
+// surfaces loudly instead of silently breaking its profile page. Exits
+// non-zero (naming each offender) when any wallet 404s or Horizon is
+// unreachable.
+//
+// The personas come from packages/types, the one shared source the web app and
+// the indexer seed both derive from — imported by relative path so this script
+// needs no workspace install. Run it with `node --experimental-strip-types`.
 //
 // Env:
-//   HORIZON_URL          Horizon base (default: testnet — demo data is testnet).
-//   DEMO_PROFILES_PATH   Override the profiles.json path (for local testing).
+//   HORIZON_URL   Horizon base (default: testnet — demo data is testnet).
 
-import { readFile } from 'node:fs/promises';
-import { fileURLToPath } from 'node:url';
-import { dirname, resolve } from 'node:path';
+import { DEMO_PROFILES } from '../packages/types/src/index.ts';
 
 const HORIZON_URL = (process.env.HORIZON_URL ?? 'https://horizon-testnet.stellar.org').replace(
   /\/+$/,
   '',
 );
 
-const here = dirname(fileURLToPath(import.meta.url));
-const profilesPath =
-  process.env.DEMO_PROFILES_PATH ?? resolve(here, '..', 'apps/web/public/data/profiles.json');
-
-const profiles = JSON.parse(await readFile(profilesPath, 'utf8'));
-const entries = Object.entries(profiles).map(([handle, profile]) => ({
-  handle,
-  wallet: profile?.wallet,
-}));
+const entries = DEMO_PROFILES.map(({ handle, wallet }) => ({ handle, wallet }));
 
 if (entries.length === 0) {
-  console.error(`No demo profiles found in ${profilesPath}`);
+  console.error('No demo profiles found in DEMO_PROFILES (packages/types)');
   process.exit(1);
 }
 
@@ -38,7 +31,7 @@ console.log(`Checking ${entries.length} demo wallet(s) against ${HORIZON_URL}\n`
 let failures = 0;
 for (const { handle, wallet } of entries) {
   if (!wallet) {
-    console.error(`✗ ${handle}: no wallet address in profiles.json`);
+    console.error(`✗ ${handle}: no wallet address in DEMO_PROFILES`);
     failures += 1;
     continue;
   }
