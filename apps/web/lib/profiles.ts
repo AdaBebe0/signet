@@ -1,5 +1,6 @@
 import { promises as fs } from 'fs';
 import path from 'path';
+import { isValidHandle } from '@signet/types';
 
 /**
  * Single source of truth for profile data.
@@ -40,12 +41,9 @@ export type Operation = {
 
 const DATA_DIR = path.join(process.cwd(), 'public/data');
 
-/** A handle is 1–32 chars of `[a-z0-9_-]` — mirrors the on-chain registry. */
-const HANDLE_RE = /^[a-z0-9_-]{1,32}$/;
-
-export function isValidHandle(handle: string): boolean {
-  return HANDLE_RE.test(handle);
-}
+// Handle rules live in @signet/types, mirrored from the on-chain registry.
+// Re-exported here so existing callers keep importing it from this module.
+export { isValidHandle };
 
 async function readJson<T>(file: string): Promise<T | null> {
   try {
