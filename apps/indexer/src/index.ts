@@ -8,7 +8,7 @@ import { runSeedWorker } from './workers/seed.js';
 import { runDeploymentWorker } from './workers/deployment.js';
 import { runActivityWorker } from './workers/activity.js';
 import { runAttestationWorker } from './workers/attestation.js';
-import { runOperationsWorker } from './workers/operations.js';
+import { runOperationsWorker, type OperationsStore } from './workers/operations.js';
 
 let shuttingDown = false;
 
@@ -46,7 +46,7 @@ async function tick(
   const { snapshotsWritten } = await runActivityWorker(horizon);
 
   // Operations: pull recent Soroban invocations for tracked wallets
-  const { opsUpserted } = await runOperationsWorker(horizon);
+  const { opsUpserted } = await runOperationsWorker(horizon, prisma as unknown as OperationsStore);
 
   // Persist cursor
   if (highestLedger > 0) {
