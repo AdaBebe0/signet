@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { RESERVED_HANDLES, isValidHandle } from '@signet/types';
+import { buildCsp, generateNonce } from './lib/csp';
 
 /**
  * Subdomain routing with a path-based fallback.
@@ -70,13 +71,12 @@ function getSubdomain(host: string): string | null {
   return null;
 }
 
-function rewriteTo(req: NextRequest, pathname: string): NextResponse {
-  const url = req.nextUrl.clone();
-  url.pathname = pathname;
-  return NextResponse.rewrite(url);
-}
-
-export function middleware(req: NextRequest): NextResponse {
+/**
+ * Resolve the routing decision for a request: the internal path to rewrite to,
+ * or `null` to pass the request through unchanged. Kept separate from the
+ * response so the per-request CSP nonce is applied at a single exit point.
+ */
+function resolveRewriteTarget(req: NextRequest): string | null {
   const host = req.headers.get('host') ?? '';
   const { pathname } = req.nextUrl;
   const subdomain = getSubdomain(host);
@@ -84,24 +84,24 @@ export function middleware(req: NextRequest): NextResponse {
   // ---- 1. Subdomain-based routing -----------------------------------------
   if (subdomain) {
     if (subdomain === 'app') {
-      return rewriteTo(req, `/app${pathname === '/' ? '' : pathname}`);
+      return `/app${pathname === '/' ? '' : pathname}`;
     }
     if (subdomain === 'docs') {
-      return rewriteTo(req, `/docs${pathname === '/' ? '' : pathname}`);
+      return `/docs${pathname === '/' ? '' : pathname}`;
     }
     if (subdomain === 'api') {
       // tRPC handler lives at /api/trpc/* — pass requests straight through.
-      return NextResponse.next();
+      return null;
     }
     if (subdomain === 'www' || RESERVED.has(subdomain)) {
       // Reserved but non-functional → marketing root.
-      return NextResponse.next();
+      return null;
     }
     // Anything else is treated as a developer handle: {handle}.signet.dev
     if (isValidHandle(subdomain) && pathname === '/') {
-      return rewriteTo(req, `/p/${subdomain}`);
+      return `/p/${subdomain}`;
     }
-    return NextResponse.next();
+    return null;
   }
 
   // ---- 2. Path-based fallback ---------------------------------------------
@@ -120,25 +120,50 @@ export function middleware(req: NextRequest): NextResponse {
     first === 'api' ||
     first === '_next'
   ) {
-    return NextResponse.next();
+    return null;
   }
 
   // `/@{handle}` → canonical profile
   if (first && first.startsWith('@')) {
     const handle = first.slice(1).toLowerCase();
     if (isValidHandle(handle)) {
-      return rewriteTo(req, `/p/${handle}`);
+      return `/p/${handle}`;
     }
-    return NextResponse.next();
+    return null;
   }
 
   // `/{handle}` where the segment isn't a reserved app route → canonical profile
   if (first && !RESERVED.has(first) && segments.length === 1 && isValidHandle(first)) {
-    return rewriteTo(req, `/p/${first}`);
+    return `/p/${first}`;
   }
 
   // Otherwise → marketing root.
-  return NextResponse.next();
+  return null;
+}
+
+export function middleware(req: NextRequest): NextResponse {
+  // Per-request nonce → CSP. Forwarding the policy on the *request* headers is
+  // what lets Next.js stamp the nonce onto its own inline bootstrap/flight
+  // scripts, so `script-src` needs no `'unsafe-inline'`.
+  const nonce = generateNonce();
+  const csp = buildCsp(nonce, { dev: process.env.NODE_ENV !== 'production' });
+
+  const requestHeaders = new Headers(req.headers);
+  requestHeaders.set('x-nonce', nonce);
+  requestHeaders.set('content-security-policy', csp);
+
+  const target = resolveRewriteTarget(req);
+  let response: NextResponse;
+  if (target) {
+    const url = req.nextUrl.clone();
+    url.pathname = target;
+    response = NextResponse.rewrite(url, { request: { headers: requestHeaders } });
+  } else {
+    response = NextResponse.next({ request: { headers: requestHeaders } });
+  }
+
+  response.headers.set('Content-Security-Policy', csp);
+  return response;
 }
 
 export const config = {
