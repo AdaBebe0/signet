@@ -68,12 +68,19 @@ export default function OperationsList({ handle, initialOperations, total }: Ope
       </div>
 
       {operations.length === 0 ? (
-        <div className="px-5 py-6">
+        <div className="bg-[#0e0d0b] px-5 py-6">
           <p
-            className="text-[13px] text-[#5e5b51]"
+            className="text-[13px] leading-[1.7] text-[#b8b5a8]"
             style={{ fontFamily: 'var(--font-mono)' }}
           >
-            No Soroban invocations indexed in this sample window.
+            This profile has not been indexed yet, so there are no Soroban invocations to display.
+          </p>
+          <p
+            className="mt-2 text-[12px] leading-[1.6] text-[#5e5b51]"
+            style={{ fontFamily: 'var(--font-mono)' }}
+          >
+            Once the wallet starts interacting with contracts, the activity timeline and stats will
+            populate here.
           </p>
         </div>
       ) : (

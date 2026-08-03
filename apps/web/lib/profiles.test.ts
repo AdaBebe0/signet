@@ -9,6 +9,7 @@ import {
   safeChainHandles,
   safeChainProfile,
   decodeResolvedAddress,
+  computeStats,
 } from './profiles.ts';
 
 test('isValidHandle accepts the registry charset', () => {
@@ -87,6 +88,11 @@ test('listAllHandles is a deduped superset of the curated handles', async () => 
 test('safeChainHandles is a no-op when the registry is not configured', async () => {
   // Must not cost an RPC round trip on every sitemap build.
   assert.deepEqual(await safeChainHandles(), []);
+});
+
+test('computeStats returns zeroed stats for missing or empty operations', () => {
+  assert.deepEqual(computeStats(undefined), { invocations: 0, uniqueFunctions: 0, reputation: 0 });
+  assert.deepEqual(computeStats([]), { invocations: 0, uniqueFunctions: 0, reputation: 0 });
 });
 
 test('getOperations returns an array (possibly empty) for any handle', async () => {
