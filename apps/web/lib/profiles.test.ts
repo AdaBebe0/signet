@@ -5,6 +5,8 @@ import {
   getProfile,
   getOperations,
   listHandles,
+  listAllHandles,
+  safeChainHandles,
   safeChainProfile,
   decodeResolvedAddress,
 } from './profiles.ts';
@@ -71,6 +73,20 @@ test('listHandles includes the curated profiles', async () => {
   const handles = await listHandles();
   assert.ok(handles.includes('aquawolf'));
   assert.ok(handles.length >= 3);
+});
+
+test('listAllHandles is a deduped superset of the curated handles', async () => {
+  // With neither DATABASE_URL nor a registry configured, the database and chain
+  // sources are both empty, so this is the curated set — but always deduped and
+  // never fewer than the manifest.
+  const [all, curated] = await Promise.all([listAllHandles(), listHandles()]);
+  for (const handle of curated) assert.ok(all.includes(handle));
+  assert.equal(all.length, new Set(all).size);
+});
+
+test('safeChainHandles is a no-op when the registry is not configured', async () => {
+  // Must not cost an RPC round trip on every sitemap build.
+  assert.deepEqual(await safeChainHandles(), []);
 });
 
 test('getOperations returns an array (possibly empty) for any handle', async () => {

@@ -153,6 +153,58 @@ export async function listHandles(): Promise<string[]> {
 }
 
 /**
+ * Best-effort list of every handle bound in the database — curated-synced rows
+ * plus self-sovereign on-chain attestations. Returns `[]` on any failure (no
+ * `DATABASE_URL`, unreachable DB) so callers still build from the static
+ * manifest alone. The DB client is imported lazily, like `safeDbProfile`.
+ */
+export async function safeDbHandles(): Promise<string[]> {
+  if (!process.env.DATABASE_URL) return [];
+  try {
+    const { prisma } = await import('@signet/db');
+    const rows = await prisma.profile.findMany({ select: { handle: true } });
+    return rows.map((r) => r.handle);
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Best-effort list of every handle currently bound on the Identity Registry,
+ * read live from the chain. This is what makes the sitemap correct before —
+ * or entirely without — an indexer sync: a handle claimed on-chain is listed
+ * as soon as the binding exists. Returns `[]` when no registry is configured
+ * or the RPC is unreachable, and imports `lib/directory` lazily to keep the
+ * module graph acyclic (`directory` imports back from here).
+ */
+export async function safeChainHandles(): Promise<string[]> {
+  if (!isRegistryConfigured()) return [];
+  try {
+    const { fetchLiveDirectory } = await import('./directory.ts');
+    const entries = await fetchLiveDirectory();
+    return entries?.map((e) => e.handle) ?? [];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Every public handle for surfaces like the sitemap and OG images: the curated
+ * manifest unioned with the database and with live on-chain bindings,
+ * de-duplicated. Mirrors `getProfile`'s three layers, so anything that renders
+ * at `/p/{handle}` is also listed. Each source degrades to `[]` on its own, so
+ * with nothing provisioned this is just the manifest.
+ */
+export async function listAllHandles(): Promise<string[]> {
+  const [curated, fromDb, fromChain] = await Promise.all([
+    listHandles(),
+    safeDbHandles(),
+    safeChainHandles(),
+  ]);
+  return [...new Set([...curated, ...fromDb, ...fromChain])];
+}
+
+/**
  * Best-effort database lookup. Returns null on ANY failure — no `DATABASE_URL`,
  * unreachable DB, empty result — so callers degrade gracefully to the chain
  * and static layers instead of throwing a 500. The DB client is imported
