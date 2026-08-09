@@ -162,15 +162,19 @@ export default async function ProfilePage({ params }: { params: Promise<{ handle
                 address={profile.wallet}
                 display={truncate(profile.wallet, 8, 6)}
               />
-              <a
-                href={`https://stellar.expert/explorer/${NETWORK}/account/${profile.wallet}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-[10px] uppercase tracking-[0.2em] text-[#8b1a1a] transition-colors hover:text-[#c2410c]"
-                style={{ fontFamily: 'var(--font-mono)' }}
-              >
-                Stellar Expert ↗
-              </a>
+              {/* Demo wallets are synthetic and don't exist on-chain, so an
+                  explorer link would land on an empty account page. */}
+              {isDemo ? null : (
+                <a
+                  href={`https://stellar.expert/explorer/${NETWORK}/account/${profile.wallet}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-[10px] uppercase tracking-[0.2em] text-[#8b1a1a] transition-colors hover:text-[#c2410c]"
+                  style={{ fontFamily: 'var(--font-mono)' }}
+                >
+                  Stellar Expert ↗
+                </a>
+              )}
             </div>
           </div>
         </section>
@@ -215,6 +219,7 @@ export default async function ProfilePage({ params }: { params: Promise<{ handle
             handle={handle}
             initialOperations={operations.slice(0, 25)}
             total={operations.length}
+            isDemo={isDemo}
           />
         </section>
 

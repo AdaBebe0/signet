@@ -29,9 +29,14 @@ interface OperationsListProps {
   handle: string;
   initialOperations: Operation[];
   total: number;
+  /**
+   * Demo profiles carry synthetic transaction hashes that resolve to nothing on
+   * Stellar Expert, so their hashes render as plain text instead of a link.
+   */
+  isDemo?: boolean;
 }
 
-export default function OperationsList({ handle, initialOperations, total }: OperationsListProps) {
+export default function OperationsList({ handle, initialOperations, total, isDemo = false }: OperationsListProps) {
   const [operations, setOperations] = useState<Operation[]>(initialOperations);
   const [offset, setOffset] = useState(initialOperations.length);
   const [loading, setLoading] = useState(false);
@@ -123,15 +128,25 @@ export default function OperationsList({ handle, initialOperations, total }: Ope
                   {fmtDate(op.created_at)}
                 </span>
                 {op.transaction_hash ? (
-                  <a
-                    href={stellarExpertTx(op.transaction_hash)}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="whitespace-nowrap text-[10px] uppercase tracking-[0.18em] text-[#8b1a1a] transition-colors hover:text-[#c2410c]"
-                    style={{ fontFamily: 'var(--font-mono)' }}
-                  >
-                    Verify ↗
-                  </a>
+                  isDemo ? (
+                    <span
+                      className="whitespace-nowrap text-[10px] text-[#5e5b51]"
+                      style={{ fontFamily: 'var(--font-mono)' }}
+                      title={op.transaction_hash}
+                    >
+                      {truncate(op.transaction_hash, 6, 4)}
+                    </span>
+                  ) : (
+                    <a
+                      href={stellarExpertTx(op.transaction_hash)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="whitespace-nowrap text-[10px] uppercase tracking-[0.18em] text-[#8b1a1a] transition-colors hover:text-[#c2410c]"
+                      style={{ fontFamily: 'var(--font-mono)' }}
+                    >
+                      Verify ↗
+                    </a>
+                  )
                 ) : (
                   <span className="text-[10px] text-[#3d3a33]" style={{ fontFamily: 'var(--font-mono)' }}>—</span>
                 )}
