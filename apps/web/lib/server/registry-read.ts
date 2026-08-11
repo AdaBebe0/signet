@@ -13,10 +13,10 @@
  * it nor consumes its sequence number, and never requires it to exist.
  *
  * Failure is always soft. A missing contract id, an unreachable RPC endpoint,
- * a simulation error or a malformed return value all resolve to `null` (or `0`
- * for `boundCount`) rather than throwing, so a registry that isn't deployed
- * yet degrades a page instead of 500-ing it. Callers that need to tell "not
- * configured" apart from "not bound" should check `isRegistryConfigured()`.
+ * a simulation error or a malformed return value all resolve to `null` rather
+ * than throwing, so a registry that isn't deployed yet degrades a page instead
+ * of 500-ing it. Callers that need to tell "not configured" apart from "not
+ * bound" should check `isRegistryConfigured()`.
  *
  * The client-side counterpart that *writes* bindings lives in `lib/registry.ts`;
  * the event-stream-based directory read lives in `lib/directory.ts`.
@@ -151,19 +151,39 @@ export async function lookupWallet(
 ): Promise<string | null> {
   if (!isValidStellarAddress(address)) return null;
 
-  const handle = await simulateRead('lookup', [new Address(address).toScVal()], options);
+  // `isValidStellarAddress` is a shape guard, not a checksum check, so an
+  // address of the right length and charset can still be a bad StrKey —
+  // `new Address()` throws on those. Encode inside the soft-failure boundary
+  // rather than letting that escape as a 500 from a read that is documented
+  // never to throw.
+  let arg: xdr.ScVal;
+  try {
+    arg = new Address(address).toScVal();
+  } catch {
+    return null;
+  }
+
+  const handle = await simulateRead('lookup', [arg], options);
 
   return typeof handle === 'string' && isValidHandle(handle) ? handle : null;
 }
 
 /**
- * Number of currently-bound handles. Falls back to 0 — the same answer as an
- * empty registry — when the read fails, since callers use this for display
- * counts rather than control flow.
+ * Number of currently-bound handles, or `null` when the registry could not be
+ * read at all (not configured, not deployed, RPC unreachable, malformed
+ * response).
+ *
+ * The null is load-bearing: "we could not ask" and "the answer is zero" are
+ * different facts, and a UI that renders the first as the second is asserting
+ * on-chain state it never observed. Callers that genuinely want a display
+ * number should coalesce at the point of rendering, having decided what an
+ * unknown count should say.
  */
-export async function boundCount(options: RegistryReadOptions = {}): Promise<number> {
+export async function boundCount(options: RegistryReadOptions = {}): Promise<number | null> {
   const raw = await simulateRead('count', [], options);
 
   const count = typeof raw === 'bigint' ? Number(raw) : raw;
-  return typeof count === 'number' && Number.isFinite(count) && count >= 0 ? Math.trunc(count) : 0;
+  return typeof count === 'number' && Number.isFinite(count) && count >= 0
+    ? Math.trunc(count)
+    : null;
 }

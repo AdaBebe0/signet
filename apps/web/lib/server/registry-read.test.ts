@@ -66,15 +66,16 @@ test('lookupWallet returns null when the registry is unconfigured', async () => 
   assert.equal(await lookupWallet(WALLET), null);
 });
 
-test('boundCount returns 0 when the registry is unconfigured', async () => {
-  assert.equal(await boundCount(), 0);
+test('boundCount returns null when the registry is unconfigured', async () => {
+  // Null, not 0 — an unreadable registry must never render as an empty one.
+  assert.equal(await boundCount(), null);
 });
 
 test('an unconfigured registry never reaches the RPC server', async () => {
   const server = stubServer(successWith(nativeToScVal('aquawolf', { type: 'string' })));
   assert.equal(await resolveHandle('aquawolf', { server }), null);
   assert.equal(await lookupWallet(WALLET, { server }), null);
-  assert.equal(await boundCount({ server }), 0);
+  assert.equal(await boundCount({ server }), null);
   assert.equal(server.calls.length, 0);
 });
 
@@ -92,10 +93,10 @@ test('lookupWallet returns null when simulation reports an error', async () => {
   assert.equal(await lookupWallet(WALLET, { server }), null);
 });
 
-test('boundCount returns 0 when simulation reports an error', async () => {
+test('boundCount returns null when simulation reports an error', async () => {
   configureRegistry();
   const server = stubServer({ error: 'HostError: contract not found' });
-  assert.equal(await boundCount({ server }), 0);
+  assert.equal(await boundCount({ server }), null);
 });
 
 test('a throwing RPC client is swallowed rather than propagated', async () => {
@@ -103,14 +104,21 @@ test('a throwing RPC client is swallowed rather than propagated', async () => {
   const server = throwingServer();
   assert.equal(await resolveHandle('aquawolf', { server }), null);
   assert.equal(await lookupWallet(WALLET, { server }), null);
-  assert.equal(await boundCount({ server }), 0);
+  assert.equal(await boundCount({ server }), null);
 });
 
 test('a simulation with no return value resolves to the unbound answer', async () => {
   configureRegistry();
   const server = stubServer({ result: undefined });
   assert.equal(await resolveHandle('aquawolf', { server }), null);
-  assert.equal(await boundCount({ server }), 0);
+  assert.equal(await boundCount({ server }), null);
+});
+
+test('boundCount distinguishes a genuinely empty registry from an unreadable one', async () => {
+  configureRegistry();
+  const empty = stubServer(successWith(nativeToScVal(0, { type: 'u32' })));
+  assert.equal(await boundCount({ server: empty }), 0);
+  assert.equal(await boundCount({ server: throwingServer() }), null);
 });
 
 // ── decoding live values ──────────────────────────────────────────────────
