@@ -63,7 +63,8 @@ Useful when running the indexer or hardening multi-instance web:
 | `INDEXER_TICK_INTERVAL_MS` | indexer | `30000` | Main loop period. |
 | `INDEXER_LOG_LEVEL` | indexer | `info` | Structured logger level. |
 | `SIGNET_SESSIONS_VALID_AFTER` | web | `0` | Epoch-ms floor; sessions with `iat` below this are rejected (global logout after secret rotation). See [`SECURITY.md`](../SECURITY.md). |
-| `UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN` | web | _(none)_ | When both set, rate limiting can use Upstash; otherwise in-memory per instance. |
+| `UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN` | web | _(none)_ | When both set, rate limiting **and the single-use sign-in nonce store** use Upstash; otherwise both are in-memory per instance. On a multi-instance deploy the nonce store is the one that matters: a replayed challenge routed to another instance would find a clean slate. |
+| `SIGNET_TRUSTED_PROXY_HOPS` | web | `0` | Reverse proxies in front of the app, for rate-limit IP attribution. Leave `0` on Vercel and Netlify — their edge sets a header that is detected automatically. Set it only behind your own proxy, to the number of hops appending to `X-Forwarded-For`. A value that is too high lets callers spoof their own bucket, so under-count rather than over-count; at `0` with no platform header every caller shares one bucket. See [`SECURITY.md`](../SECURITY.md). |
 | `STELLAR_ACCOUNT` / `NETWORK` / `ADMIN_ADDRESS` | contracts CI / deploy script | `deployer` / `testnet` / deployer address | Shell env for `infra/deploy-contract.sh` only. |
 | `DEPLOY_ENABLED` | GitHub Actions | unset | Repo **variable**; when `"true"`, `deploy.yml` runs migrations + publishes the indexer image. |
 | `DATABASE_URL` (Actions secret) | contracts CI / deploy workflow | — | Production migrate job secret when `DEPLOY_ENABLED` is on. |
