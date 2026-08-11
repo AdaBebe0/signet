@@ -65,18 +65,6 @@ export function Close() {
           </span>
         </a>
       </motion.div>
-
-      {/* Footer line */}
-      <motion.p
-        initial={{ opacity: 0 }}
-        whileInView={{ opacity: 1 }}
-        viewport={{ once: true, amount: 0.5 }}
-        transition={{ duration: 1, delay: 1 }}
-        className="mt-10 text-[10px] uppercase tracking-[0.24em] text-[#3d3a33]"
-        style={{ fontFamily: "var(--font-mono)" }}
-      >
-        Stellar mainnet · No fees to claim · Open source
-      </motion.p>
     </section>
   );
 }
