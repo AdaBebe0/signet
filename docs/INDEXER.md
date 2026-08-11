@@ -79,15 +79,24 @@ Consequences worth knowing before an incident:
 ### Cold start (the ledger window)
 
 With no `attestation` row, the worker asks the RPC for the current ledger and starts at
-`latestLedger - INDEXER_EVENT_WINDOW_LEDGERS`, floored at 1. The default 17 280 ledgers is
-roughly **24 hours** at ~5 s/ledger.
+`latestLedger - INDEXER_EVENT_WINDOW_LEDGERS`, floored at 1. The default is **8000 ledgers**,
+roughly **11 hours** at ~5 s/ledger.
 
-That default is a deliberate compromise: public Soroban RPC nodes retain only a bounded
-event history (typically ~24 h on testnet), so asking for much more just fails. **A first
-run therefore only sees the last day of claims** — bindings older than the window are not
-reconstructed. If you need the complete history, either replay it from an archive/full RPC
-node with a larger `INDEXER_EVENT_WINDOW_LEDGERS`, or accept the curated seed data as the
-baseline and let the on-chain events accumulate from now on.
+That default is a deliberate, empirically-verified margin, not a round guess. Public Soroban
+RPC nodes retain only a bounded event history, and testnet's advertised figure (~24h) turns
+out to overstate what a single `getEvents` call actually returns: bisecting against
+`https://soroban-testnet.stellar.org` found the practical limit is roughly **10,700 ledgers
+(~15h)** — past that, `startLedger` still returns a valid `200 OK` with `events: []`, not an
+error. **There is nothing to catch.** A window sized to the advertised 24h looks correct and
+silently drops everything older than the actual ~15h floor; the worker still advances its
+cursor to `latestLedger` afterward, so the gap is not retried — it's gone.
+
+`8000` leaves real margin below that floor. **A first run therefore only sees the last ~11
+hours of claims** — bindings older than the window are not reconstructed, and cannot be, from
+this endpoint. If you need the complete history, replay it from an archive/full RPC node (set
+`INDEXER_RPC_URL`) that actually retains it — raising `INDEXER_EVENT_WINDOW_LEDGERS` against
+the *public* endpoint does not help, it just silently truncates further out. Otherwise, accept
+the curated seed data as the baseline and let on-chain events accumulate from now on.
 
 Each `getEvents` call takes at most **200 events**. A window with more than 200 events in
 it yields the first 200; the cursor then jumps to `latestLedger`, so **the remainder of
@@ -109,7 +118,7 @@ requires a restart.
 | `INDEXER_TICK_INTERVAL_MS` | `30000` | Sleep between ticks. |
 | `INDEXER_LOG_LEVEL` | `info` | `debug` \| `info` \| `warn` \| `error`. |
 | `INDEXER_REGISTRY_CONTRACT_ID` | falls back to `NEXT_PUBLIC_IDENTITY_REGISTRY_ID`, then `''` | Identity Registry `C…` id. Empty → attestation worker no-ops. |
-| `INDEXER_EVENT_WINDOW_LEDGERS` | `17280` | Cold-start lookback, in ledgers. |
+| `INDEXER_EVENT_WINDOW_LEDGERS` | `8000` | Cold-start lookback, in ledgers. See §Cold start — larger values silently under-scan against the public RPC. |
 
 `--reseed` is a CLI flag, not an env var: `pnpm indexer:seed`.
 
@@ -247,10 +256,17 @@ operations or snapshots, and it does not remove profiles deleted from `seed-data
 DELETE FROM "IndexerCursor" WHERE id = 'attestation';
 ```
 
-then restart with a larger window, e.g. `INDEXER_EVENT_WINDOW_LEDGERS=86400` (~5 days) —
-which only helps against an RPC node that actually retains that history. Re-applying
-already-seen events is harmless. Remember the 200-events-per-call ceiling: for a busy
-backfill, step the cursor forward in chunks rather than one huge window.
+then restart with a larger window, e.g. `INDEXER_EVENT_WINDOW_LEDGERS=86400` (~5 days).
+
+**This only works against an archive/full RPC node** (`INDEXER_RPC_URL`) that actually
+retains that history. Against the public testnet endpoint it does not degrade gracefully —
+`getEvents` returns a normal, error-free `events: []` once `startLedger` is more than
+~10,700 ledgers (~15h) behind the tip (see §Cold start), so a large window against the
+public RPC looks like it worked and silently skips the backfill entirely, then advances the
+cursor past the gap anyway. Point `INDEXER_RPC_URL` at an archival provider before raising
+this past the ~8000 default. Re-applying already-seen events is harmless. Remember the
+200-events-per-call ceiling too: for a busy backfill, step the cursor forward in chunks
+rather than one huge window.
 
 **Full rebuild** (local only):
 
