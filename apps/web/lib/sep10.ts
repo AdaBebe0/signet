@@ -55,14 +55,33 @@ let cachedKeypair: Keypair | null = null;
 export function getServerKeypair(): Keypair {
   if (cachedKeypair) return cachedKeypair;
   const secret = process.env.SEP10_SIGNING_SECRET;
-  if (secret) return (cachedKeypair = Keypair.fromSecret(secret));
+  if (secret) {
+    try {
+      return (cachedKeypair = Keypair.fromSecret(secret));
+    } catch {
+      // `Keypair.fromSecret` throws a bare `invalid checksum` with no hint at
+      // which setting is wrong. Left unhandled it surfaced as an anonymous 500
+      // from `/.well-known/stellar.toml` — the discovery document every SEP-10
+      // client reads first — so a one-character typo looked like an outage.
+      throw new Sep10ConfigError(
+        'SEP10_SIGNING_SECRET is not a valid Stellar secret key (expected an S… StrKey)',
+      );
+    }
+  }
   if (process.env.NODE_ENV === 'production') {
-    throw new Error('SEP10_SIGNING_SECRET must be set in production');
+    throw new Sep10ConfigError('SEP10_SIGNING_SECRET must be set in production');
   }
   return (cachedKeypair = Keypair.random());
 }
 
 export class Sep10Error extends Error {}
+
+/**
+ * The service is misconfigured — distinct from `Sep10Error`, which means the
+ * *caller* sent something invalid. Routes map this to a 503: nothing the client
+ * did caused it, and no retry with different input will fix it.
+ */
+export class Sep10ConfigError extends Error {}
 
 /**
  * Build a SEP-10 challenge transaction for `clientAccountId`.

@@ -1,4 +1,5 @@
-import { getNetworkPassphrase, getServerKeypair } from '@/lib/sep10';
+import { getNetworkPassphrase, getServerKeypair, Sep10ConfigError } from '@/lib/sep10';
+import { logger } from '@/lib/logger';
 
 export const runtime = 'nodejs';
 
@@ -13,11 +14,25 @@ function appUrl(): string {
  * app knows it's there.
  */
 export async function GET() {
+  let signingKey: string;
+  try {
+    signingKey = getServerKeypair().publicKey();
+  } catch (err) {
+    if (err instanceof Sep10ConfigError) {
+      logger.error({ err: err.message }, 'sep10.misconfigured');
+      return new Response(`# ${err.message}\n`, {
+        status: 503,
+        headers: { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store' },
+      });
+    }
+    throw err;
+  }
+
   const toml = [
     `NETWORK_PASSPHRASE="${getNetworkPassphrase()}"`,
     `WEB_AUTH_ENDPOINT="${appUrl()}/api/auth/sep10"`,
-    `SIGNING_KEY="${getServerKeypair().publicKey()}"`,
-    `ACCOUNTS=["${getServerKeypair().publicKey()}"]`,
+    `SIGNING_KEY="${signingKey}"`,
+    `ACCOUNTS=["${signingKey}"]`,
   ].join('\n');
 
   return new Response(toml + '\n', {

@@ -1,8 +1,16 @@
 import { NextResponse } from 'next/server';
 import { WebAuth } from '@stellar/stellar-sdk';
-import { buildChallenge, verifyChallenge, issueJwt, getNetworkPassphrase, Sep10Error } from '@/lib/sep10';
+import {
+  buildChallenge,
+  verifyChallenge,
+  issueJwt,
+  getNetworkPassphrase,
+  Sep10ConfigError,
+  Sep10Error,
+} from '@/lib/sep10';
 import { issueSession, SESSION_COOKIE } from '@/lib/auth';
 import { isValidStellarAddress } from '@/lib/stellar-address';
+import { LIMITS, enforceRateLimit } from '@/lib/rate-limit-http';
 import { logger } from '@/lib/logger';
 
 export const runtime = 'nodejs';
@@ -22,7 +30,23 @@ export const runtime = 'nodejs';
  */
 const CORS_HEADERS = { 'Access-Control-Allow-Origin': '*' };
 
+/**
+ * Stamp the CORS header onto a response built elsewhere (the shared rate-limit
+ * guard). A 429 a cross-origin SEP-10 client cannot read is a 429 it cannot act
+ * on — it would surface as an opaque network failure instead of "back off".
+ */
+function withCors(res: NextResponse): NextResponse {
+  for (const [key, value] of Object.entries(CORS_HEADERS)) res.headers.set(key, value);
+  return res;
+}
+
 export async function GET(req: Request) {
+  // Tightest bucket in the app. This endpoint is unauthenticated, deliberately
+  // reachable cross-origin, and signs a transaction on every call — without a
+  // limit, any page on the web can drive ed25519 signing here.
+  const limited = await enforceRateLimit(req, 'sep10:challenge', LIMITS.sep10);
+  if (limited) return withCors(limited);
+
   const { searchParams } = new URL(req.url);
   const account = searchParams.get('account');
   const homeDomain = searchParams.get('home_domain') ?? undefined;
@@ -41,12 +65,21 @@ export async function GET(req: Request) {
       { headers: { ...CORS_HEADERS, 'cache-control': 'no-store' } },
     );
   } catch (err) {
+    // A missing or malformed signing key is our fault, not the caller's — a 400
+    // told SEP-10 clients to fix their request when nothing about it was wrong.
+    if (err instanceof Sep10ConfigError) {
+      logger.error({ err: err.message }, 'sep10.misconfigured');
+      return NextResponse.json({ error: err.message }, { status: 503, headers: CORS_HEADERS });
+    }
     const message = err instanceof Sep10Error ? err.message : 'Could not build challenge';
     return NextResponse.json({ error: message }, { status: 400, headers: CORS_HEADERS });
   }
 }
 
 export async function POST(req: Request) {
+  const limited = await enforceRateLimit(req, 'sep10:verify', LIMITS.sep10);
+  if (limited) return withCors(limited);
+
   const { transaction } = (await req.json().catch(() => ({}))) as { transaction?: string };
   if (!transaction) {
     return NextResponse.json({ error: 'transaction is required' }, { status: 400, headers: CORS_HEADERS });
@@ -56,6 +89,10 @@ export async function POST(req: Request) {
   try {
     clientAccountId = verifyChallenge(transaction);
   } catch (err) {
+    if (err instanceof Sep10ConfigError) {
+      logger.error({ err: err.message }, 'sep10.misconfigured');
+      return NextResponse.json({ error: err.message }, { status: 503, headers: CORS_HEADERS });
+    }
     const message =
       err instanceof Sep10Error || err instanceof WebAuth.InvalidChallengeError
         ? err.message
