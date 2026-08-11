@@ -21,11 +21,16 @@ NEXT_PUBLIC_IDENTITY_REGISTRY_ID=CASFJHI5PQSRWS7JV25CF7FOMRKIVBP3RXRP3E2GH2CV4BC
 **What the deployment does *not* change:** the three profiles at `/p/{handle}`
 still render the curated **synthetic testnet manifest** in
 `apps/web/public/data/` — a live registry does not make that data real activity.
-`/handles` is the one surface that reads live on-chain state (the registry's
-`claimed`/`released` event stream), and it falls back to the same curated manifest
-when no contract id is configured or the RPC call fails.
+`/handles` is the one surface that reads live on-chain state. It discovers candidate
+handles from the registry's `claimed`/`released` event stream, then confirms each one
+with a `resolve` call before listing it as bound, and takes its headline number from
+the contract's own `count()`. Curated demo handles that do not resolve are shown in a
+separate section labelled *not bound on-chain* and are never counted — with no contract
+id configured, the page says so rather than presenting the manifest as registry state.
 
 ## Live demo
+
+**<https://signet-web-pearl.vercel.app>** — deployed from `main`.
 
 > Demo profiles use **synthetic data on Stellar testnet** — generated, unowned
 > accounts — so no real wallet's activity is attributed to an invented persona.
@@ -39,7 +44,7 @@ when no contract id is configured or the RPC call fails.
 | `/p/aquawolf` | Demo profile — Blend-style collateral ops (testnet, synthetic) |
 | `/p/sorobuilder` | Demo profile — Soroswap-style DEX swaps (testnet, synthetic) |
 | `/p/stellardev` | Demo profile — USDC token transfers (testnet, synthetic) |
-| `/handles` | Handle directory — live `claimed`/`released` events from the registry (curated manifest as fallback) |
+| `/handles` | Handle directory — bindings confirmed against the registry via `resolve`, counted by its own `count()`; demo personas listed separately and labelled *not bound on-chain* |
 | `/how-it-works` | How Signet works + what's coming |
 | [`docs/DEMO_DATA.md`](docs/DEMO_DATA.md) | Demo fixture provenance, schema, and honesty policy |
 
@@ -184,8 +189,8 @@ set from the event stream.
 
 | Suite | Count |
 |-------|-------|
-| `pnpm test` | **170** — `@signet/web` 106 · `@signet/indexer` 36 · `@signet/sdk` 19 · `@signet/types` 9 (`ui`, `db` have no tests yet) |
-| `cargo test` | **24** — `packages/contracts/identity-registry` |
+| `pnpm test` | **208** — `@signet/web` 137 · `@signet/indexer` 36 · `@signet/sdk` 26 · `@signet/types` 9 (`ui`, `db` have no tests yet) |
+| `cargo test` | **30** — `packages/contracts/identity-registry` |
 
 Both are CI gates ([`ci.yml`](.github/workflows/ci.yml)), alongside `lint`,
 `typecheck`, `build` and the wasm contract build.

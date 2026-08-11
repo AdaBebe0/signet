@@ -7,8 +7,8 @@
 | Project | Signet ([`README.md`](README.md)) |
 | Requested | **$67,650 USD** over 9 months |
 | Period | 2026-08-01 → 2027-04-30 |
-| Status at time of writing | Web app deployed; Identity Registry code-complete and unit-tested but **not deployed on-chain**; indexer containerised but not provisioned |
-| Prepared | 2026-07-28 |
+| Status at time of writing | Web app deployed; **Identity Registry deployed and initialized on Stellar testnet** (2026-07-09, `CASFJHI5PQSRWS7JV25CF7FOMRKIVBP3RXRP3E2GH2CV4BCAG7FUJRCN`) with 24 unit tests; indexer containerised but not provisioned |
+| Prepared | 2026-07-28 · status refreshed 2026-08-10 |
 
 This document consolidates material previously scattered across
 [`README.md`](README.md), [`NEXT_STEPS.md`](NEXT_STEPS.md),
@@ -55,17 +55,18 @@ Three gaps produce that outcome:
 Signet has already built the hard part and can prove it: the Identity Registry
 Soroban contract is implemented with `claim` / `release` / `transfer_handle` /
 `admin_revoke`, enforces ownership through `require_auth`, emits an event stream
-that makes handle enumeration an off-chain concern, and is covered by 18 `cargo`
+that makes handle enumeration an off-chain concern, and is covered by 30 `cargo`
 tests. The indexer implements both data flows end to end. The web app renders
 profiles today.
 
-**What is missing is not code — it is operation.** As
-[`ARCHITECTURE.md`](ARCHITECTURE.md) states plainly, the registry is *not yet
-deployed on-chain*, so the claim flow shows an honest "Phase 2" message rather
-than binding anything; the indexer has no database to write to; and the three
-demo profiles at `/p/{handle}` render **synthetic testnet data** because there
-is no live binding to render instead. Every remaining gap in the product traces
-back to that one fact.
+**What is missing is not code — it is operation.** The registry is deployed and
+initialized on **testnet** (2026-07-09), and the claim flow submits real signed
+`claim` invocations against it wherever a contract id is configured. What is not
+yet operating is everything around it: there is no **mainnet** deployment, and
+none is appropriate before the audit budgeted in §6; the indexer has no database
+to write to; and the three demo profiles at `/p/{handle}` render **synthetic
+testnet data**, clearly labelled as such, because no mainnet binding exists to
+render instead. Every remaining gap in the product traces back to that.
 
 The consequence is visible in the issue tracker and is the most honest argument
 for this grant: a self-sovereign identity layer cannot be finished as
@@ -329,8 +330,8 @@ pnpm lint && pnpm typecheck && pnpm test && pnpm build
 | Claim | Where to check |
 | --- | --- |
 | Contract enforces ownership through `require_auth` | [`packages/contracts/identity-registry/src/lib.rs`](packages/contracts/identity-registry/src/lib.rs) |
-| 18 contract tests | [`packages/contracts/identity-registry/src/test.rs`](packages/contracts/identity-registry/src/test.rs) |
-| Registry is not yet deployed | [`ARCHITECTURE.md`](ARCHITECTURE.md) § *Deployed vs operational-only* |
+| 30 contract tests | [`packages/contracts/identity-registry/src/test.rs`](packages/contracts/identity-registry/src/test.rs) |
+| Registry is deployed on testnet, not mainnet | [`docs/REGISTRY_INTEGRATION.md`](docs/REGISTRY_INTEGRATION.md) § *Deployment* — contract id and wasm hash, verifiable from any RPC |
 | Demo data is synthetic | [`README.md`](README.md) § *Live demo*; [`apps/web/public/data/`](apps/web/public/data/) |
 | Both data flows are code-complete | [`ARCHITECTURE.md`](ARCHITECTURE.md) § *Flow 1* / *Flow 2* |
 | Config flags that flip Phase 2 live | [`.env.example`](.env.example) |
