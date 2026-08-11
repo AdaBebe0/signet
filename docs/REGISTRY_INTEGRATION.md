@@ -204,8 +204,11 @@ replay `claimed` / `released` (/ `revoked`) and fold them:
 ```ts
 const { sequence } = await server.getLatestLedger();
 
-// Public RPC retains a bounded history — ~17 280 ledgers ≈ 24 h at ~5 s/ledger.
-let startLedger = Math.max(1, sequence - 17_280);
+// Public RPC's advertised retention (~24h) overstates what getEvents actually
+// serves: it returns a valid empty result — not an error — once startLedger is
+// more than ~10,700 ledgers (~15h) behind the tip. Stay well under that; there
+// is nothing to catch if you go past it, so verify empirically before raising it.
+let startLedger = Math.max(1, sequence - 8_000);
 let cursor: string | undefined;
 const bound = new Map<string, string>();   // handle → wallet
 
