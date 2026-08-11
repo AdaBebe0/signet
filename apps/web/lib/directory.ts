@@ -1,23 +1,34 @@
 import { rpc, scValToNative, xdr } from '@stellar/stellar-sdk';
 import { ALLOW_HTTP, REGISTRY_CONTRACT_ID, SOROBAN_RPC_URL, isRegistryConfigured } from './chain.ts';
 import { isValidHandle, listHandles as listCuratedHandles } from './profiles.ts';
+import { boundCount, resolveHandle, type RegistryReadOptions } from './server/registry-read.ts';
 
 /**
  * Public handle directory (powers `/handles`).
  *
- * Reconstructs the *currently* bound set of handles straight from the
- * Identity Registry's `claimed`/`released` event stream over Soroban RPC.
- * No database required: the indexer's Postgres-backed sync
+ * Two different reads, for two different jobs:
+ *
+ *   1. **Discovery** — `fetchLiveDirectory` reconstructs handles from the
+ *      Identity Registry's `claimed`/`released` event stream over Soroban
+ *      RPC. This is how a handle nobody has told us about gets found. A
+ *      public RPC endpoint only retains events for a bounded window (the
+ *      default below mirrors the indexer's own cold-start window), so it
+ *      sees only bindings claimed inside that window.
+ *   2. **Confirmation** — `listDirectory` then asks the contract directly,
+ *      via `resolveHandle`, whether each candidate is *actually* bound right
+ *      now, and takes the authoritative total from the registry's own
+ *      `count()`.
+ *
+ * The second step is what keeps the page honest. Event-stream discovery
+ * alone both under-reports (a handle claimed before the window is invisible)
+ * and, when it comes back empty, used to be indistinguishable from "nothing
+ * is bound" — which is how curated demo handles ended up rendered as
+ * on-chain bindings. Candidates that do not resolve are still listed, but
+ * carry `bound: false` so the UI can label them as the previews they are.
+ *
+ * No database required either way: the indexer's Postgres-backed sync
  * (apps/indexer/src/workers/attestation.ts) is a separate, longer-lived
  * accelerant, not a dependency of this page.
- *
- * A public RPC endpoint only retains events for a bounded window (the
- * default below mirrors the indexer's own cold-start window), so this can
- * only see bindings claimed within that window. That's an accepted
- * tradeoff for a page with no persistence of its own: it always reflects
- * live on-chain state within the window, and falls back to the curated
- * demo manifest when the registry isn't deployed yet or the RPC call fails
- * outright, so the page never 500s either way.
  */
 
 export type DirectoryEntry = { handle: string; wallet: string };
@@ -118,17 +129,56 @@ export async function fetchLiveDirectory(): Promise<DirectoryEntry[] | null> {
 }
 
 /**
- * The list backing `/handles`: prefers the live on-chain directory, falls
- * back to the curated demo manifest so the page always has something to
- * show — and an honest empty state, not a crash — whether or not the
- * registry is deployed yet.
+ * One row of `/handles`. `bound` is the only field the UI may treat as a
+ * claim about on-chain state: it is true only when `resolve(handle)` came
+ * back with a wallet just now.
  */
-export async function listDirectory(): Promise<DirectoryEntry[]> {
-  const live = await fetchLiveDirectory();
-  if (live && live.length > 0) return live;
+export type DirectoryListing = DirectoryEntry & { bound: boolean };
 
-  const curated = await listCuratedHandles();
-  return curated
-    .map((handle) => ({ handle, wallet: '' }))
-    .sort((a, b) => a.handle.localeCompare(b.handle));
+export interface Directory {
+  /** Bound entries first, then unconfirmed previews; alphabetical within each. */
+  entries: DirectoryListing[];
+  /**
+   * The registry's own `count()` — the authoritative number of bound
+   * handles. `null` when the registry could not be read at all (not
+   * deployed, not configured, RPC down), which is *not* the same as zero
+   * and must not be rendered as one.
+   */
+  boundTotal: number | null;
+}
+
+/**
+ * The list backing `/handles`.
+ *
+ * Discovers candidates from the event stream and the curated manifest, then
+ * confirms each one against the contract so a row is only ever marked bound
+ * when the chain says so. Degrades instead of throwing: an unreadable
+ * registry yields `boundTotal: null` and every candidate unconfirmed, so the
+ * page renders previews under an honest caption rather than 500-ing.
+ */
+export async function listDirectory(options: RegistryReadOptions = {}): Promise<Directory> {
+  const [discovered, curated] = await Promise.all([fetchLiveDirectory(), listCuratedHandles()]);
+
+  const candidates = [...new Set([...(discovered ?? []).map((e) => e.handle), ...curated])].sort(
+    (a, b) => a.localeCompare(b),
+  );
+
+  // `boundCount` already answers null for an unconfigured or unreachable
+  // registry, so no separate configured-check is needed here — and unlike
+  // `chain.ts`'s module-level snapshot, it re-reads the environment per call.
+  const [confirmed, boundTotal] = await Promise.all([
+    Promise.all(
+      candidates.map(async (handle) => {
+        const wallet = await resolveHandle(handle, options);
+        return { handle, wallet: wallet ?? '', bound: wallet !== null };
+      }),
+    ),
+    boundCount(options),
+  ]);
+
+  // Bound handles lead; previews follow. `candidates` is already sorted, and
+  // a stable partition preserves that order inside each group.
+  const entries = [...confirmed.filter((e) => e.bound), ...confirmed.filter((e) => !e.bound)];
+
+  return { entries, boundTotal };
 }
