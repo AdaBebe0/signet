@@ -18,6 +18,7 @@ and for claiming. For the contract's own source see
 | **Network** | Stellar **testnet** |
 | **Network passphrase** | `Test SDF Network ; September 2015` |
 | **Contract id** | `CASFJHI5PQSRWS7JV25CF7FOMRKIVBP3RXRP3E2GH2CV4BCAG7FUJRCN` |
+| **Wasm sha256** | `936996c74b7d383c56ec174857b15927cdd29478c6909da332b4dec8b67335fe` |
 | **Soroban RPC** | `https://soroban-testnet.stellar.org` |
 | **Deployed** | 2026-07-09 |
 | **Status** | Deployed and initialized. No mainnet deployment yet. |
@@ -26,25 +27,46 @@ and for claiming. For the contract's own source see
 npm install @stellar/stellar-sdk    # v15.x — the version this repo pins
 ```
 
-The testnet instance is a live but empty registry — at the time of writing `count()`
-returns `0`. Every read snippet below therefore returns an empty/`null` result until
-handles are claimed; that is the correct behaviour, not a misconfiguration.
+The wasm hash is pinned deliberately. `main` moves faster than the deployment, so the
+contract source in this repo can be ahead of what is actually on-chain — §2 says exactly
+which methods the pinned wasm exposes. Verify for yourself at any time:
+
+```bash
+stellar contract info interface --network testnet \
+  --id CASFJHI5PQSRWS7JV25CF7FOMRKIVBP3RXRP3E2GH2CV4BCAG7FUJRCN
+```
 
 ---
 
 ## 2. Interface
+
+### Callable on the deployment above
+
+These are the methods the pinned wasm exposes. Everything in §3–§6 targets this set.
 
 | Method | Auth | Returns | Notes |
 |--------|------|---------|-------|
 | `initialize(admin: Address)` | — | `()` | One-time. Already called on the deployment above. |
 | `claim(handle: String, wallet: Address)` | `wallet` | `()` | Binds `handle ↔ wallet`. Emits `claimed`. |
 | `release(handle: String)` | owning wallet | `()` | Emits `released`. |
-| `transfer_handle(handle: String, new_wallet: Address)` | current owner | `()` | Emits `transferred`. |
 | `admin_revoke(handle: String)` | admin | `()` | Moderation. Emits `revoked`. |
 | `resolve(handle: String)` | — | `Option<Address>` | Handle → wallet. |
 | `lookup(wallet: Address)` | — | `Option<String>` | Wallet → handle. |
 | `is_bound(handle: String)` | — | `bool` | |
 | `count()` | — | `u32` | Currently-bound handles, O(1). |
+
+### In `main`, not yet deployed
+
+Implemented and unit-tested in
+[`packages/contracts/identity-registry`](../packages/contracts/identity-registry), but **not
+present in the pinned wasm** — invoking them against the contract id above fails. They become
+callable at the next deployment, which will mint a new contract id.
+
+| Method | Auth | Returns | Notes |
+|--------|------|---------|-------|
+| `transfer_handle(handle: String, new_wallet: Address)` | current owner | `()` | Emits `transferred`. |
+| `resolve_batch(handles: Vec<String>)` | — | `Vec<Option<Address>>` | Positional; max 100 per call. |
+| `set_admin(new_admin: Address)` | current admin | `()` | Rotates moderation authority. Emits `admin_changed`. |
 
 Bindings are **1:1** — one handle per wallet, one wallet per handle. Handles are 1–32
 bytes of `[a-z0-9_-]`. There is no on-chain enumeration; see §5.
@@ -67,6 +89,15 @@ discriminant as a numeric contract error. In a failed simulation it appears as
 | 5 | `NotOwner` | Reserved for ownership violations. Note that `release` and `transfer_handle` enforce ownership through `require_auth` on the resolved owner, so a non-owner fails with an **auth** error, not this code. |
 | 6 | `InvalidHandle` | `claim` with an empty handle, one longer than 32 bytes, or one containing anything outside `[a-z0-9_-]` (including uppercase). |
 | 7 | `WalletAlreadyBound` | `claim` (or `transfer_handle` to a target) for a wallet that already owns a handle. |
+| 8 † | `HandleReserved` | `claim` for a name that collides with a Signet app route (`p`, `api`, `app`, `admin`, `docs`, `handles`, `how-it-works`, `profile`, `robots`, `sitemap`). |
+| 9 † | `BatchTooLarge` | `resolve_batch` with more than 100 handles. |
+
+† Codes 8 and 9 are **not** in the deployed wasm — like `transfer_handle` and
+`resolve_batch`, they arrived after the 2026-07-09 deployment. Two consequences for anyone
+integrating against the pinned contract id today: the reserved-name check is not enforced
+on-chain, so a direct caller can bind e.g. `app` (the web app's own router refuses to route
+reserved names to a profile, so this shadows nothing there); and `resolve_batch` is absent
+entirely. Both take effect at the next deployment.
 
 Anything raised by `require_auth` — a missing or invalid signature — is a Soroban **auth**
 error, not one of the above.
@@ -87,7 +118,11 @@ Every state change publishes one event. The topic tuple is always
 | `claimed` | `[ symbol("claimed"), string(handle) ]` | `address(wallet)` | `claim` |
 | `released` | `[ symbol("released"), string(handle) ]` | `address(wallet)` | `release` |
 | `revoked` | `[ symbol("revoked"), string(handle) ]` | `address(wallet)` | `admin_revoke` |
-| `transferred` | `[ symbol("transferred"), string(handle) ]` | `[ address(from), address(to) ]` (a 2-tuple) | `transfer_handle` |
+| `transferred` † | `[ symbol("transferred"), string(handle) ]` | `[ address(from), address(to) ]` (a 2-tuple) | `transfer_handle` |
+
+† `transfer_handle` is not in the deployed wasm (see §2), so the pinned deployment never
+emits `transferred`. It is documented here so consumers written now keep working after the
+next deployment.
 
 Decoding one event:
 
@@ -280,9 +315,10 @@ Notes:
   [`apps/web/lib/registry.ts`](../apps/web/lib/registry.ts).
 - **Funding.** The claiming account must exist and hold XLM. On testnet:
   `curl "https://friendbot.stellar.org/?addr=<G…>"`.
-- `release(handle)` and `transfer_handle(handle, new_wallet)` follow the identical
-  build → simulate → sign → submit shape; both require auth from the **current owner**,
-  which the contract resolves from the handle rather than from the transaction source.
+- `release(handle)` follows the identical build → simulate → sign → submit shape, and
+  requires auth from the **current owner**, which the contract resolves from the handle
+  rather than from the transaction source. `transfer_handle(handle, new_wallet)` works the
+  same way but is not in the deployed wasm yet (§2).
 
 ---
 
