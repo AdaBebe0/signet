@@ -82,11 +82,43 @@ pub struct IdentityRegistry;
 #[contractimpl]
 impl IdentityRegistry {
     /// One-time setup. Records the admin used for moderation actions.
+    ///
+    /// `admin.require_auth()` is what stops the deployment being hijacked.
+    /// Deploying and initializing are two separate transactions, so without it
+    /// anyone watching the ledger could land their own `initialize` in the gap,
+    /// become admin, and hold `admin_revoke` — the power to force-unbind any
+    /// handle — permanently, since the registry can only be initialized once.
     pub fn initialize(env: Env, admin: Address) -> Result<(), Error> {
+        admin.require_auth();
         if env.storage().instance().has(&DataKey::Admin) {
             return Err(Error::AlreadyInitialized);
         }
         env.storage().instance().set(&DataKey::Admin, &admin);
+        Self::bump_instance(&env);
+        Ok(())
+    }
+
+    /// Hand moderation authority to `new_admin`. Requires the current admin.
+    ///
+    /// Without this the admin is write-once: a compromised or lost key would be
+    /// permanent, and the only remedy would be redeploying the registry, which
+    /// abandons every existing binding. Rotation is deliberately separate from
+    /// contract upgradeability — the wasm stays immutable.
+    pub fn set_admin(env: Env, new_admin: Address) -> Result<(), Error> {
+        let admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .ok_or(Error::NotInitialized)?;
+        admin.require_auth();
+
+        env.storage().instance().set(&DataKey::Admin, &new_admin);
+        Self::bump_instance(&env);
+
+        env.events().publish(
+            (soroban_sdk::Symbol::new(&env, "admin_changed"),),
+            (admin, new_admin),
+        );
         Ok(())
     }
 
@@ -122,6 +154,7 @@ impl IdentityRegistry {
 
         let count: u32 = env.storage().instance().get(&DataKey::Count).unwrap_or(0);
         env.storage().instance().set(&DataKey::Count, &(count + 1));
+        Self::bump_instance(&env);
 
         env.events()
             .publish((symbol_short!("claimed"), handle), wallet);
@@ -155,6 +188,7 @@ impl IdentityRegistry {
         env.storage()
             .persistent()
             .extend_ttl(&new_wallet_key, BUMP_THRESHOLD, BUMP_LEDGERS);
+        Self::bump_instance(&env);
 
         env.events().publish(
             (soroban_sdk::Symbol::new(&env, "transferred"), handle),
@@ -239,6 +273,21 @@ impl IdentityRegistry {
 
     // ── internal ────────────────────────────────────────────────────────────
 
+    /// Extend the contract instance's own TTL.
+    ///
+    /// `Admin` and `Count` live in instance storage, and the bindings' bumps in
+    /// `persistent` storage do nothing for it. Left alone the instance would
+    /// eventually archive, at which point `require_initialized` fails and every
+    /// state-changing call reverts until someone restores it — the registry
+    /// would look bricked while its bindings were still perfectly alive.
+    /// Called from every write path, so any activity keeps the whole registry
+    /// resident for the same window as a binding.
+    fn bump_instance(env: &Env) {
+        env.storage()
+            .instance()
+            .extend_ttl(BUMP_THRESHOLD, BUMP_LEDGERS);
+    }
+
     fn require_initialized(env: &Env) -> Result<(), Error> {
         if env.storage().instance().has(&DataKey::Admin) {
             Ok(())
@@ -264,6 +313,7 @@ impl IdentityRegistry {
         env.storage()
             .instance()
             .set(&DataKey::Count, &count.saturating_sub(1));
+        Self::bump_instance(env);
 
         env.events()
             .publish((event_name, handle.clone()), wallet.clone());

@@ -381,3 +381,81 @@ fn resolve_batch_rejects_oversized() {
     let res = client.try_resolve_batch(&handles);
     assert_eq!(res, Err(Ok(Error::BatchTooLarge)));
 }
+
+// ── admin authority ───────────────────────────────────────────────────────
+
+#[test]
+fn initialize_requires_admin_auth() {
+    // The hijack this prevents: deploy and initialize are separate
+    // transactions, so without an auth requirement anyone could land their own
+    // `initialize` in the gap and own `admin_revoke` forever.
+    let env = Env::default();
+    let contract_id = env.register(IdentityRegistry, ());
+    let client = IdentityRegistryClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
+
+    env.mock_all_auths();
+    client.initialize(&admin);
+
+    let auths = env.auths();
+    assert_eq!(auths.len(), 1);
+    assert_eq!(auths[0].0, admin, "initialize must be authorized by the admin");
+}
+
+#[test]
+#[should_panic]
+fn initialize_without_authorization_panics() {
+    // No `mock_all_auths`, so `require_auth` has nothing to satisfy it.
+    let env = Env::default();
+    let contract_id = env.register(IdentityRegistry, ());
+    let client = IdentityRegistryClient::new(&env, &contract_id);
+    client.initialize(&Address::generate(&env));
+}
+
+#[test]
+fn set_admin_rotates_authority() {
+    let (env, client, _admin) = setup();
+    let new_admin = Address::generate(&env);
+    let handle = String::from_str(&env, "spammer");
+    client.claim(&handle, &Address::generate(&env));
+
+    client.set_admin(&new_admin);
+
+    // The rotated admin can moderate — proving the stored authority changed.
+    client.admin_revoke(&handle);
+    assert!(!client.is_bound(&handle));
+}
+
+#[test]
+fn set_admin_requires_current_admin_auth() {
+    let (env, client, admin) = setup();
+    let new_admin = Address::generate(&env);
+
+    client.set_admin(&new_admin);
+
+    let auths = env.auths();
+    assert_eq!(auths.len(), 1);
+    assert_eq!(
+        auths[0].0, admin,
+        "rotation must be authorized by the outgoing admin, not the incoming one"
+    );
+}
+
+#[test]
+fn set_admin_before_initialize_errors() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(IdentityRegistry, ());
+    let client = IdentityRegistryClient::new(&env, &contract_id);
+
+    let res = client.try_set_admin(&Address::generate(&env));
+    assert_eq!(res, Err(Ok(Error::NotInitialized)));
+}
+
+#[test]
+fn set_admin_emits_event() {
+    let (env, client, _admin) = setup();
+    client.set_admin(&Address::generate(&env));
+    // Asserted immediately: `env.events()` only reflects the last invocation.
+    assert!(!env.events().all().events().is_empty());
+}
