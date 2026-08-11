@@ -33,6 +33,22 @@ test('dashboard shows the sign-in wall when unauthenticated', async ({ page }) =
   await expect(page.getByRole('button', { name: /sign in with wallet/i })).toBeVisible();
 });
 
+test('the handle directory never presents demo personas as on-chain bindings', async ({ page }) => {
+  // Regression guard: /handles used to render the curated demo manifest under
+  // the caption "N handles currently bound on the Identity Registry", so three
+  // unbound personas were asserted as registry state. Demo handles may only
+  // appear inside the explicitly-labelled preview section.
+  await page.goto('/handles');
+
+  const previews = page.locator('section', { hasText: 'Demo profiles' });
+  await expect(previews.getByText(/Not bound on-chain/i)).toBeVisible();
+  await expect(previews.getByText('@aquawolf')).toBeVisible();
+
+  // The count in the caption comes from the contract, so with no registry
+  // configured it must not claim any binding at all.
+  await expect(page.getByText(/handles? currently bound on the Identity Registry/i)).toHaveCount(0);
+});
+
 test('how-it-works page renders', async ({ page }) => {
   await page.goto('/how-it-works');
   await expect(page.getByText(/Phase 2/i).first()).toBeVisible();
