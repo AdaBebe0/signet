@@ -8,7 +8,13 @@ export interface IndexerConfig {
   reseed: boolean;
   /** Identity Registry contract id (C…). Empty until the contract is deployed. */
   registryContractId: string;
-  /** On first run (no cursor), how many ledgers back to begin reading events. */
+  /**
+   * On first run (no cursor), how many ledgers back to begin reading events.
+   * Default is deliberately inside the public RPC's observed practical span
+   * for `getEvents` — see apps/web/lib/directory.ts's EVENT_WINDOW_LEDGERS
+   * comment for how that boundary was found, and why exceeding it doesn't
+   * error, it just silently returns nothing.
+   */
   eventWindowLedgers: number;
 }
 
@@ -28,6 +34,6 @@ export function loadConfig(): IndexerConfig {
       process.env.INDEXER_REGISTRY_CONTRACT_ID ??
       process.env.NEXT_PUBLIC_IDENTITY_REGISTRY_ID ??
       '',
-    eventWindowLedgers: Number(process.env.INDEXER_EVENT_WINDOW_LEDGERS ?? 17_280),
+    eventWindowLedgers: Number(process.env.INDEXER_EVENT_WINDOW_LEDGERS ?? 8_000),
   };
 }

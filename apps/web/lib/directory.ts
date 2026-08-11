@@ -11,9 +11,9 @@ import { boundCount, resolveHandle, type RegistryReadOptions } from './server/re
  *   1. **Discovery** — `fetchLiveDirectory` reconstructs handles from the
  *      Identity Registry's `claimed`/`released` event stream over Soroban
  *      RPC. This is how a handle nobody has told us about gets found. A
- *      public RPC endpoint only retains events for a bounded window (the
- *      default below mirrors the indexer's own cold-start window), so it
- *      sees only bindings claimed inside that window.
+ *      public RPC endpoint only serves events within a bounded, empirically
+ *      narrower-than-advertised window (see `EVENT_WINDOW_LEDGERS` below), so
+ *      it sees only bindings claimed inside that window.
  *   2. **Confirmation** — `listDirectory` then asks the contract directly,
  *      via `resolveHandle`, whether each candidate is *actually* bound right
  *      now, and takes the authoritative total from the registry's own
@@ -35,8 +35,23 @@ export type DirectoryEntry = { handle: string; wallet: string };
 
 type RawEvent = { kind: 'claimed' | 'released'; handle: string; wallet: string };
 
-/** How far back to scan on every request (no cursor persisted between requests). */
-const EVENT_WINDOW_LEDGERS = Number(process.env.REGISTRY_EVENT_WINDOW_LEDGERS ?? 17_280);
+/**
+ * How far back to scan on every request (no cursor persisted between requests).
+ *
+ * 17,280 (~24h at ~5s/ledger) was the original assumption, matching the
+ * public RPC's advertised retention. Empirically it does not hold: bisecting
+ * against `https://soroban-testnet.stellar.org` found `getEvents` returns an
+ * EMPTY result — not an error — once `startLedger` is roughly 10,700+ ledgers
+ * (~15h) behind the current tip, well inside the advertised window. There is
+ * nothing to catch: the response is a well-formed success with no events, so
+ * a too-large window doesn't fail loudly, it just silently under-reports.
+ *
+ * 8,000 ledgers (~11h) keeps real margin below that observed floor. If this
+ * endpoint's behavior changes, or a different provider is configured via
+ * `SOROBAN_RPC_URL`, re-verify empirically before raising it — a `getEvents`
+ * call from this endpoint will never tell you it truncated.
+ */
+const EVENT_WINDOW_LEDGERS = Number(process.env.REGISTRY_EVENT_WINDOW_LEDGERS ?? 8_000);
 /** Safety cap so a slow/unreachable RPC can't turn this into an unbounded loop. */
 const MAX_PAGES = 50;
 
