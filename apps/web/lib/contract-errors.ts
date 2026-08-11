@@ -12,7 +12,15 @@
  * numbers.
  */
 
-/** Human-readable messages keyed by their contract Error discriminant. */
+/**
+ * Human-readable messages keyed by their contract Error discriminant.
+ *
+ * Codes 8 and 9 exist in the contract source but not in the currently deployed
+ * wasm (see `docs/REGISTRY_INTEGRATION.md` §2), so they are unreachable against
+ * today's testnet instance. They are mapped anyway: the alternative is that the
+ * first deployment carrying them silently degrades a precise, actionable
+ * message into the generic fallback.
+ */
 const CONTRACT_ERROR_MESSAGES: Record<number, string> = {
   1: 'The registry is already initialised.', // AlreadyInitialized
   2: 'The registry has not been initialised yet.', // NotInitialized
@@ -21,6 +29,8 @@ const CONTRACT_ERROR_MESSAGES: Record<number, string> = {
   5: 'You are not the owner of that handle.', // NotOwner
   6: 'That handle is invalid. Use 1–32 lowercase letters, digits, hyphens, or underscores.', // InvalidHandle
   7: 'This wallet already has a handle.', // WalletAlreadyBound
+  8: 'That handle is reserved for a Signet route.', // HandleReserved
+  9: 'Too many handles in one batch — resolve at most 100 at a time.', // BatchTooLarge
 } as const;
 
 const FALLBACK_MESSAGE = 'An unexpected contract error occurred. Please try again.';

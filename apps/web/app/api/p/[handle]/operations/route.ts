@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getOperations } from '@/lib/profiles';
+import { LIMITS, enforceRateLimit } from '@/lib/rate-limit-http';
 
 export const runtime = 'nodejs';
 
@@ -16,6 +17,9 @@ export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ handle: string }> },
 ) {
+  const limited = await enforceRateLimit(_req, 'profile:operations', LIMITS.read);
+  if (limited) return limited;
+
   const { handle } = await params;
 
   const url = new URL(_req.url);
