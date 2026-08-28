@@ -27,7 +27,7 @@ export function Hero() {
 
       {/* Nav */}
       <nav className="relative z-40 flex items-center justify-between px-8 py-7 md:px-14 md:py-9">
-        <a href="#" className="group flex items-center gap-3">
+        <a href="/" className="group flex items-center gap-3">
           <SignetMonogram className="h-6 w-6 text-[#f5f4ee]" />
           <span className="text-[15px] font-medium tracking-tight">Signet</span>
         </a>
