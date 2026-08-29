@@ -372,4 +372,5 @@ fn is_reserved_handle(handle: &String) -> bool {
     false
 }
 
+mod property_test;
 mod test;
