@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { headers } from 'next/headers';
 import { IBM_Plex_Sans, IBM_Plex_Mono } from 'next/font/google';
 import './globals.css';
+import { appUrl } from '@/lib/public-env';
 
 // Self-hosted at build time by next/font — no runtime request to Google Fonts,
 // so page text no longer waits on a third-party stylesheet + font fetch.
@@ -20,7 +21,7 @@ const ibmPlexMono = IBM_Plex_Mono({
 });
 
 export const metadata: Metadata = {
-  metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'),
+  metadataBase: new URL(appUrl()),
   title: 'Signet',
   description: 'A verifiable developer career record built on Stellar/Soroban.',
 };
