@@ -135,6 +135,8 @@ const ENV_ALLOW = new Set([
   'GITHUB_ACTIONS',
   'DEPLOY_ENABLED', // GitHub repo variable, not app env
   'BUDGET_BYTES', // CI workflow env
+  'DEMO_HORIZON_URL', // GitHub repo variable, not app env
+  'DEMO_WALLETS_REQUIRE_HORIZON', // GitHub repo variable, not app env
   'NETWORK', // shell override for deploy-contract.sh
   'STELLAR_ACCOUNT', // shell override for deploy-contract.sh
   'ADMIN_ADDRESS', // shell override for deploy-contract.sh
