@@ -28,9 +28,18 @@ import {
   isRegistryConfigured,
   type RegistryReadOptions,
 } from './server/registry-read.ts';
+import { getNonceStoreStatus } from './nonce-store.ts';
+import { getRateLimitStoreStatus } from './rate-limit.ts';
 
 /** Per-dependency verdict. `skipped` means "not configured here", not "healthy". */
 export type CheckStatus = 'up' | 'down' | 'skipped';
+
+/**
+ * Shared-store verdict. `memory` is the per-instance fallback: not an error,
+ * but on a serverless deploy it means replicas do not share a view, so it must
+ * be visible rather than reported as `up`.
+ */
+export type StoreStatus = 'up' | 'down' | 'memory';
 
 /** How long any single dependency gets before it counts as down. */
 export const CHECK_TIMEOUT_MS = 2_000;
@@ -44,6 +53,18 @@ export interface HealthChecks {
    * RPC endpoint is reachable, and the registry contract answers on it.
    */
   registry: CheckStatus;
+  /**
+   * The shared store backing single-use sign-in nonces. It fails **closed**
+   * (`lib/nonce-store.ts`): when freshness cannot be established the sign-in is
+   * refused, so `down` here means authentication is broken right now.
+   */
+  nonceStore: StoreStatus;
+  /**
+   * The shared store backing per-ip rate limits. It fails **open**, so `down`
+   * is a silent security degradation rather than an outage — reported, but not
+   * a reason to call the deployment degraded.
+   */
+  rateLimitStore: StoreStatus;
 }
 
 export interface HealthReport {
@@ -103,15 +124,26 @@ export async function checkRegistry(options: RegistryReadOptions = {}): Promise<
   }
 }
 
-/** `degraded` when any configured dependency is down; `ok` otherwise. */
+/**
+ * `degraded` when a dependency whose failure users can feel is down.
+ *
+ * Every check is reported, but they do not all mean the same thing. Postgres,
+ * the registry and the nonce store each break something a user is doing right
+ * now. The rate-limit store failing open leaves the product fully functional
+ * and merely unprotected — paging on it would train operators to ignore the
+ * probe, so it is surfaced in `checks` and deliberately excluded here.
+ */
 export function overallStatus(checks: HealthChecks): 'ok' | 'degraded' {
-  return Object.values(checks).includes('down') ? 'degraded' : 'ok';
+  const degrading = [checks.db, checks.registry, checks.nonceStore];
+  return degrading.includes('down') ? 'degraded' : 'ok';
 }
 
 /** Probes to run. Overridable so tests need neither a database nor an RPC. */
 export interface HealthProbes {
   db?: () => Promise<CheckStatus>;
   registry?: () => Promise<CheckStatus>;
+  nonceStore?: () => Promise<StoreStatus>;
+  rateLimitStore?: () => Promise<StoreStatus>;
 }
 
 /**
@@ -122,12 +154,14 @@ export interface HealthProbes {
  * to give up on the request.
  */
 export async function collectHealth(probes: HealthProbes = {}): Promise<HealthReport> {
-  const [db, registry] = await Promise.all([
+  const [db, registry, nonceStore, rateLimitStore] = await Promise.all([
     (probes.db ?? checkDb)(),
     (probes.registry ?? checkRegistry)(),
+    (probes.nonceStore ?? getNonceStoreStatus)(),
+    (probes.rateLimitStore ?? getRateLimitStoreStatus)(),
   ]);
 
-  const checks: HealthChecks = { db, registry };
+  const checks: HealthChecks = { db, registry, nonceStore, rateLimitStore };
   return {
     status: overallStatus(checks),
     service: 'signet-web',

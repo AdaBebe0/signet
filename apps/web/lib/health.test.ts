@@ -89,9 +89,19 @@ test('registry is down when the RPC hangs rather than hanging the probe', async 
 test('a down registry degrades the probe even with the database up', async () => {
   // The regression this whole check exists for: the claim flow, /handles and
   // chain-backed profiles are all down, and the old probe said "ok".
-  const report = await collectHealth({ db: probe('up'), registry: probe('down') });
+  const report = await collectHealth({
+    db: probe('up'),
+    registry: probe('down'),
+    nonceStore: async () => 'up',
+    rateLimitStore: async () => 'up',
+  });
   assert.equal(report.status, 'degraded');
-  assert.deepEqual(report.checks, { db: 'up', registry: 'down' });
+  assert.deepEqual(report.checks, {
+    db: 'up',
+    registry: 'down',
+    nonceStore: 'up',
+    rateLimitStore: 'up',
+  });
 });
 
 test('a down database still degrades the probe', async () => {
@@ -126,9 +136,32 @@ test('checks run concurrently, so the probe is not the sum of its timeouts', asy
   assert.ok(Date.now() - started < 220, 'probes must not run serially');
 });
 
-test('overallStatus degrades on any down check', () => {
-  assert.equal(overallStatus({ db: 'up', registry: 'up' }), 'ok');
-  assert.equal(overallStatus({ db: 'skipped', registry: 'up' }), 'ok');
-  assert.equal(overallStatus({ db: 'up', registry: 'down' }), 'degraded');
-  assert.equal(overallStatus({ db: 'down', registry: 'skipped' }), 'degraded');
+const stores = { nonceStore: 'up', rateLimitStore: 'up' } as const;
+
+test('overallStatus degrades on any down user-facing check', () => {
+  assert.equal(overallStatus({ db: 'up', registry: 'up', ...stores }), 'ok');
+  assert.equal(overallStatus({ db: 'skipped', registry: 'up', ...stores }), 'ok');
+  assert.equal(overallStatus({ db: 'up', registry: 'down', ...stores }), 'degraded');
+  assert.equal(overallStatus({ db: 'down', registry: 'skipped', ...stores }), 'degraded');
+});
+
+test('a down nonce store degrades the probe: it fails closed, so sign-in is broken', () => {
+  assert.equal(
+    overallStatus({ db: 'up', registry: 'up', nonceStore: 'down', rateLimitStore: 'up' }),
+    'degraded',
+  );
+});
+
+test('a down rate-limit store is reported but does not degrade: it fails open', () => {
+  assert.equal(
+    overallStatus({ db: 'up', registry: 'up', nonceStore: 'up', rateLimitStore: 'down' }),
+    'ok',
+  );
+});
+
+test('the per-instance memory fallback is visible without being an error', () => {
+  assert.equal(
+    overallStatus({ db: 'up', registry: 'up', nonceStore: 'memory', rateLimitStore: 'memory' }),
+    'ok',
+  );
 });
