@@ -232,7 +232,7 @@ variable there is listed below so docs and the example file stay in lockstep
 | `INDEXER_EVENT_WINDOW_LEDGERS` | indexer attestation | First-run event lookback |
 | `INDEXER_TICK_INTERVAL_MS` | indexer loop | Default `30000` |
 | `REGISTRY_CONTRACT_ID` | web `/handles` | Falls back to `NEXT_PUBLIC_IDENTITY_REGISTRY_ID` |
-| `REGISTRY_EVENT_WINDOW_LEDGERS` | web `/handles` | Per-request event lookback |
+| `REGISTRY_EVENT_WINDOW_LEDGERS` | web `/handles` | Per-request event lookback, used only when no `DATABASE_URL` is configured |
 
 ---
 
