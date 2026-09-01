@@ -86,9 +86,7 @@ test('no warning for a real production origin, or for development localhost', ()
 
 test('assertPublicEnv throws on a bad environment and is quiet on a good one', () => {
   assert.throws(() => assertPublicEnv({ NODE_ENV: 'production' }), /NEXT_PUBLIC_APP_URL/);
-  assert.doesNotThrow(() =>
-    assertPublicEnv({ NODE_ENV: 'production', NEXT_PUBLIC_APP_URL: SITE }),
-  );
+  assert.doesNotThrow(() => assertPublicEnv({ NODE_ENV: 'production', NEXT_PUBLIC_APP_URL: SITE }));
 });
 
 test('appUrl returns the configured origin, normalized, and the dev default otherwise', () => {

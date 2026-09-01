@@ -51,8 +51,7 @@ export default defineConfig({
             REGISTRY_CONTRACT_ID:
               process.env.REGISTRY_CONTRACT_ID ??
               'CASFJHI5PQSRWS7JV25CF7FOMRKIVBP3RXRP3E2GH2CV4BCAG7FUJRCN',
-            SOROBAN_RPC_URL:
-              process.env.SOROBAN_RPC_URL ?? 'https://soroban-testnet.stellar.org',
+            SOROBAN_RPC_URL: process.env.SOROBAN_RPC_URL ?? 'https://soroban-testnet.stellar.org',
           }
         : {}),
     },
