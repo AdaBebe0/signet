@@ -1,5 +1,6 @@
 import type { MetadataRoute } from 'next';
 import { listAllHandles } from '@/lib/profiles';
+import { profileRoutes, staticRoutes } from '@/lib/sitemap';
 import { appUrl } from '@/lib/public-env';
 
 /**
@@ -18,15 +19,5 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   // module-scope snapshot would be taken before it ever ran.
   const BASE = appUrl();
   const now = new Date();
-  const staticRoutes: MetadataRoute.Sitemap = [
-    { url: `${BASE}/`, lastModified: now, priority: 1 },
-    { url: `${BASE}/how-it-works`, lastModified: now, priority: 0.7 },
-    { url: `${BASE}/docs`, lastModified: now, priority: 0.5 },
-  ];
-  const profiles = (await listAllHandles()).map((handle) => ({
-    url: `${BASE}/p/${handle}`,
-    lastModified: now,
-    priority: 0.6,
-  }));
-  return [...staticRoutes, ...profiles];
+  return [...staticRoutes(now, BASE), ...profileRoutes(await listAllHandles(), now, BASE)];
 }
